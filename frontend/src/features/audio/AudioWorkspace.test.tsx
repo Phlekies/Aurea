@@ -5,6 +5,7 @@ import { audioAsset, audioConfig, jsonResponse } from '../../test/fixtures';
 import { AudioWorkspace } from './AudioWorkspace';
 
 vi.mock('./AudioPlayer', () => ({ AudioPlayer: () => <div>Reproductor de prueba</div> }));
+vi.mock('./AnalysisPanel', () => ({ AnalysisPanel: ({ audioId }: { audioId: string }) => <div>Informe para {audioId}</div> }));
 afterEach(() => vi.unstubAllGlobals());
 
 it('uploads a chosen file, shows native metadata, and allows replacing it', async () => {

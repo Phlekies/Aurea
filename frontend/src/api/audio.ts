@@ -25,7 +25,7 @@ export type AudioConfig = z.infer<typeof configSchema>;
 export type Waveform = z.infer<typeof waveformSchema>;
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
-async function request<T>(path: string, schema: z.ZodType<T>, options: RequestInit = {}, timeoutMs = 10000): Promise<T> {
+export async function audioRequest<T>(path: string, schema: z.ZodType<T>, options: RequestInit = {}, timeoutMs = 10000): Promise<T> {
   const timeout = AbortSignal.timeout(timeoutMs);
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
@@ -44,21 +44,21 @@ async function request<T>(path: string, schema: z.ZodType<T>, options: RequestIn
 }
 
 export function getAudioConfig(signal?: AbortSignal) {
-  return request('/api/audio/config', configSchema, { signal });
+  return audioRequest('/api/audio/config', configSchema, { signal });
 }
 
 export function getAudio(id: string, signal?: AbortSignal) {
-  return request(`/api/audio/${encodeURIComponent(id)}`, assetSchema, { signal });
+  return audioRequest(`/api/audio/${encodeURIComponent(id)}`, assetSchema, { signal });
 }
 
 export function getWaveform(id: string, signal?: AbortSignal) {
-  return request(`/api/audio/${encodeURIComponent(id)}/waveform`, waveformSchema, { signal });
+  return audioRequest(`/api/audio/${encodeURIComponent(id)}/waveform`, waveformSchema, { signal });
 }
 
 export function uploadAudio(file: File, signal?: AbortSignal) {
   const body = new FormData();
   body.append('file', file);
-  return request('/api/audio', assetSchema, { method: 'POST', body, signal }, 600000);
+  return audioRequest('/api/audio', assetSchema, { method: 'POST', body, signal }, 600000);
 }
 
 export function streamUrl(id: string) {

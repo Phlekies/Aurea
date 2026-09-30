@@ -29,7 +29,7 @@ export function App() {
           <span className="nav-item unavailable"><Headphones size={18} />Mis proyectos<span className="soon">Pronto</span></span>
           <span className="nav-item unavailable"><SlidersHorizontal size={18} />Presets<span className="soon">Pronto</span></span>
         </nav>
-        <div className="sidebar-bottom"><div className="mini-icon"><Sparkles size={18} /></div><strong>Un buen sonido se entiende.</strong><p>Mejora tu audio y descubre el porqué de cada ajuste.</p><span className="version">DESARROLLO · V0.2.0</span></div>
+        <div className="sidebar-bottom"><div className="mini-icon"><Sparkles size={18} /></div><strong>Un buen sonido se entiende.</strong><p>Mejora tu audio y descubre el porqué de cada ajuste.</p><span className="version">DESARROLLO · V0.3.0</span></div>
       </aside>
 
       <main id="studio">
@@ -49,7 +49,7 @@ export function App() {
             </div>
           </section>
 
-          <footer className="development-note"><div><Check size={15} /><span>Carga y reproducción disponibles</span></div><div><Circle size={12} /><span>Siguiente: análisis de audio</span></div>{service === 'offline' && <button onClick={() => { setService('connecting'); setAttempt((value) => value + 1); }}>Reintentar conexión</button>}</footer>
+          <footer className="development-note"><div><Check size={15} /><span>Carga, reproducción y análisis disponibles</span></div><div><Circle size={12} /><span>Siguiente: diagnóstico automático</span></div>{service === 'offline' && <button onClick={() => { setService('connecting'); setAttempt((value) => value + 1); }}>Reintentar conexión</button>}</footer>
         </div>
       </main>
     </div>

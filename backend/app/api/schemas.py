@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict, RootModel
 
+from app.domain.analysis import AudioAnalysis
 from app.domain.audio import AudioAsset, AudioConfig, Waveform
 
 
@@ -26,3 +27,9 @@ class WaveformResponse(RootModel[Waveform]):
 
 class AudioConfigResponse(RootModel[AudioConfig]):
     """Limits consumed by the UI; the backend remains the authority."""
+
+
+class AudioAnalysisResponse(RootModel[AudioAnalysis]):
+    """Finite analysis metrics and nullable logarithmic values for silence."""
+
+    model_config = ConfigDict(allow_inf_nan=False)

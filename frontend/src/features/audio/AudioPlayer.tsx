@@ -22,7 +22,7 @@ export function AudioPlayer({ asset }: { asset: AudioAsset }) {
       wave = WaveSurfer.create({
         container: container.current, media: audio.current, peaks: data.peaks,
         duration: data.duration_seconds, url: streamUrl(asset.id), height: 100,
-        waveColor: '#b6c6a7', progressColor: '#35583f', cursorColor: '#a58a4f',
+        waveColor: '#00E5FF', progressColor: '#1DE9B6', cursorColor: '#FFFFFF',
         barWidth: 3, barGap: 2, barRadius: 2, normalize: false, dragToSeek: true,
       });
       wave.on('ready', () => setReady(true));

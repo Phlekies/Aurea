@@ -12,6 +12,15 @@ export const audioAsset = {
 };
 
 export const waveform = { duration_seconds: 5, sample_rate: 44100, channels: 1, peaks: [[0.1, 0.2, 0.4, 0.2]] };
+export const analysis = {
+  audio_id: audioAsset.id, analyzer_version: '0.3.0', sample_rate: 44100, channels: 1,
+  duration_seconds: 5, peak_dbfs: -6, rms_dbfs: -9, crest_factor_db: 3,
+  integrated_lufs: -10, true_peak_dbtp: -5.8, dc_offset: [0], zero_crossing_rate: .02,
+  silence_percent: 0, silence_threshold_dbfs: -60,
+  bands: [{ name: 'Medios', low_hz: 250, high_hz: 2000, power: .125, percent: 100 }],
+  spectrum: { frequencies_hz: [0, 440, 22050], psd_dbfs_per_hz: [null, -20, null] },
+  dynamics: { window_ms: 100, points: [{ start_seconds: 0, duration_seconds: .1, peak_dbfs: -6, rms_dbfs: -9 }] },
+};
 export function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 }

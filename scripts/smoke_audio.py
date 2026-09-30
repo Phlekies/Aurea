@@ -1,4 +1,4 @@
-"""Dependency-free upload/metadata/waveform/range smoke test for local and Docker APIs."""
+"""Dependency-free ingestion/analysis smoke test for local and Docker APIs."""
 
 import argparse
 import io
@@ -28,7 +28,7 @@ def sample_audio(seconds: int = 3) -> bytes:
 
 
 def main() -> None:
-    """Upload synthetic audio and check the complete ingestion HTTP contract."""
+    """Upload synthetic audio and check the ingestion and analysis HTTP contracts."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--write-sample", type=Path)
@@ -67,7 +67,22 @@ def main() -> None:
     request = urllib.request.Request(endpoint + "/stream", headers={"Range": "bytes=0-43"})
     with urllib.request.urlopen(request, timeout=10) as response:
         assert response.status == 206 and response.read().startswith(b"RIFF")
-    print("Audio smoke test passed: upload, metadata, waveform and HTTP range streaming")
+    request = urllib.request.Request(endpoint + "/analyze", data=b"", method="POST")
+    with urllib.request.urlopen(request, timeout=180) as response:
+        assert response.status == 200
+        analysis = json.load(response)
+    assert analysis["audio_id"] == asset["id"]
+    assert analysis["duration_seconds"] == 3
+    assert math.isfinite(analysis["integrated_lufs"])
+    assert analysis["peak_dbfs"] < 0 and math.isfinite(analysis["true_peak_dbtp"])
+    assert len(analysis["spectrum"]["frequencies_hz"]) == len(
+        analysis["spectrum"]["psd_dbfs_per_hz"]
+    )
+    with urllib.request.urlopen(endpoint + "/analysis", timeout=10) as response:
+        assert json.load(response) == analysis
+    with urllib.request.urlopen(request, timeout=10) as response:
+        assert json.load(response) == analysis
+    print("Audio smoke passed: upload, metadata, waveform, streaming and cached analysis")
 
 
 if __name__ == "__main__":

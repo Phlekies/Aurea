@@ -11,11 +11,13 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse
 
+from app.api.analysis import router as analysis_router
 from app.api.audio import router as audio_router
 from app.api.health import router as health_router
 from app.api.schemas import ErrorResponse
 from app.config import Settings
 from app.domain.errors import AudioError
+from app.services.analysis import AnalysisService
 from app.services.ingestion import AudioService
 from app.upload_limits import UploadLimitMiddleware
 
@@ -23,23 +25,27 @@ from app.upload_limits import UploadLimitMiddleware
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build an isolated application instance for servers and integration tests."""
     config = settings or Settings.from_env()
-    ingestion_logger = logging.getLogger("aurea.ingestion")
-    ingestion_logger.setLevel(logging.INFO)
     server_handlers = logging.getLogger("uvicorn.error").handlers
-    if server_handlers and not ingestion_logger.handlers:
-        # Reuse server formatting; tests and embedded callers can configure their own handlers.
-        ingestion_logger.handlers.extend(server_handlers)
-        ingestion_logger.propagate = False
+    for name in ("aurea.ingestion", "aurea.analysis"):
+        service_logger = logging.getLogger(name)
+        service_logger.setLevel(logging.INFO)
+        if server_handlers and not service_logger.handlers:
+            # Embedded callers can configure their own handlers.
+            service_logger.handlers.extend(server_handlers)
+            service_logger.propagate = False
     service = AudioService(config)
+    analysis_service = AnalysisService(service)
 
     async def clean_expired() -> None:
         while True:
             await asyncio.sleep(60)
             await run_in_threadpool(service.cleanup)
+            await run_in_threadpool(analysis_service.cleanup)
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         await run_in_threadpool(service.cleanup)
+        await run_in_threadpool(analysis_service.cleanup)
         task = asyncio.create_task(clean_expired())
         try:
             yield
@@ -55,6 +61,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.state.audio_service = service
+    application.state.analysis_service = analysis_service
     application.add_middleware(UploadLimitMiddleware, max_bytes=config.max_upload_bytes + 65536)
 
     @application.exception_handler(AudioError)
@@ -76,4 +83,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application.include_router(health_router)
     application.include_router(audio_router)
+    application.include_router(analysis_router)
     return application

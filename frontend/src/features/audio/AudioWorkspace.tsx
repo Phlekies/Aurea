@@ -3,6 +3,7 @@ import { ArrowRight, AudioLines, FileAudio, LoaderCircle, ShieldCheck, Upload } 
 import { getAudioConfig, uploadAudio, type AudioAsset, type AudioConfig } from '../../api/audio';
 import { ApiError } from '../../api/client';
 import { AudioPlayer } from './AudioPlayer';
+import { AnalysisPanel } from './AnalysisPanel';
 import { formatSize, formatTime } from './format';
 
 export function AudioWorkspace() {
@@ -71,7 +72,7 @@ export function AudioWorkspace() {
           <div className="recording-heading"><div className="recording-title"><FileAudio size={21} /><div><h3>{asset.filename}</h3><p>{asset.format.toUpperCase()} · {formatSize(asset.size_bytes)}{asset.bitrate !== null ? ` · ${Math.round(asset.bitrate / 1000)} kbps` : ''}</p></div></div><button className="secondary-button" onClick={() => input.current?.click()} disabled={!config}><Upload size={14} />Cambiar audio</button></div>
           <div className="audio-metadata"><div><span>DURACIÓN</span><strong>{formatTime(asset.duration_seconds)}</strong></div><div><span>MUESTREO</span><strong>{asset.sample_rate / 1000} kHz</strong></div><div><span>CANALES</span><strong>{asset.channels === 1 ? 'Mono' : 'Estéreo'}</strong></div><div><span>CÓDEC</span><strong>{asset.codec}</strong></div></div>
           <AudioPlayer key={asset.id} asset={asset} />
-          <div className="next-analysis"><AudioLines size={16} /><span>Audio listo. El diagnóstico automático llegará en la siguiente fase.</span></div>
+          <AnalysisPanel key={`analysis-${asset.id}`} audioId={asset.id} />
         </div>
       )}
       <div className="privacy"><ShieldCheck size={17} /><span>Original sin modificar. {config ? `Borrado automático tras ${Math.round(config.retention_seconds / 3600)} h.` : 'Consultando conservación…'}</span></div>

@@ -16,7 +16,7 @@ Aceptación: implementación, pruebas, documentación, ejemplo reproducible, API
 
 ## Siguiente fase
 
-Fase 2 — Motor de análisis básico: peak/RMS dBFS, crest factor, DC offset, bandas/espectro/PSD, dinámica y silencio, loudness y true peak; pruebas con señales sintéticas y contratos de análisis.
+Fase 3 — Diagnóstico automático: transformar las mediciones de la fase 2 en problemas comprensibles y evidencia.
 
 Las fases posteriores siguen el orden del plan. No se considerará terminado un entregable sin pruebas, documentación y comprobaciones de calidad.
 
@@ -33,3 +33,19 @@ Verificación local: 32 pruebas de backend y 19 de frontend correctas, tipos y l
 [CI de la fase 1](https://github.com/Phlekies/Aurea/actions/runs/36737166994) correcto: jobs `quality` y `docker` pasan, incluido el smoke que sube audio, recupera metadatos y waveform y comprueba reproducción parcial a través del proxy. La fase cumple implementación, pruebas, documentación, ejemplo reproducible, API, errores, logs, revisión de tipos y lint. Los activos de ingesta serán la entrada del motor de análisis de la fase 2.
 
 Limitaciones: almacenamiento local sin cuentas ni historial de proyectos, 30 minutos/100 MiB por defecto, dos ingestas simultáneas por proceso y cancelación de cliente (no de worker). La retención exige que el proceso esté activo para purgar en el momento programado; al reiniciar se limpia lo pendiente. SoundFile/SciPy no incluyen todos los tipos necesarios: mypy mantiene modo estricto para código propio y excluye únicamente imports sin stubs de esas bibliotecas.
+
+## Fase 2 — Motor de análisis básico completada (v0.3.0)
+
+Paleta definitiva elegida por el usuario: Claridad Acústica. Fondo `#0B132B`, primario `#00E5FF`, secundario `#1DE9B6`, interfaz `#3A506B` y texto `#FFFFFF`; superficies derivadas oscuras, botones con texto oscuro y controles accesibles. Waveform y gráficas siguen los mismos colores.
+
+Implementado: pico y RMS dBFS, crest factor, DC por canal, duración exacta, cruces por cero, energía por bandas, espectro/PSD promedio, dinámica temporal, porcentaje de silencio, loudness integrado y true peak. Cálculo por bloques, potencia de canales independiente, ventanas de silencio de 20 ms, dinámica de al menos 100 ms, Welch de 2048 muestras y loudness con puertas R128 de 400 ms. True peak con interpolación float64 a al menos 4×/192 kHz. Los dB no definidos se representan con `null` y se explican en la UI.
+
+API: POST `/api/audio/{id}/analyze` y GET `/api/audio/{id}/analysis`; un cálculo simultáneo por proceso, caché versionada con validación de estructura/rangos/coherencia, publicación JSON atómica, recuperación tras reinicio, comprobación de caducidad y limpieza de copias temporales. Una caché dañada se puede recalcular. Integración vertical: ingesta → señal original decodificada → motor → servicio/API → informe visual y descarga JSON.
+
+Interfaz: botón de análisis, estado de cálculo, recuperación de informe y errores reintentables, seis métricas principales, gráficas de PSD y pico/RMS, bandas y detalles técnicos, descarga completa. Cambiar de audio cancela la espera y aísla el estado del informe. La reproducción sigue disponible durante el cálculo.
+
+Verificación local: `npm run check` correcto; **83 pruebas backend y 27 frontend** correctas (110 total), Ruff/formato, ESLint, mypy estricto, TypeScript y build. Nuevas pruebas analíticas y de referencia: seno/ganancia/DC/silencio, clips de una muestra, mono/estéreo en oposición, canales silenciosos, 8/44,1/48/96 kHz, loudness contra `loudnorm`, true peak entre muestras, determinismo, límites de puntos, cachés incoherentes, caducidad/capacidad/errores y recuperación UI. Smoke HTTP con carga, reproducción Range, cálculo, GET y reutilización de caché correcto. Informe revisado en navegador a tamaño escritorio y 390 px; descarga JSON encontrada y validada. Persisten avisos externos de Starlette/httpx, caché pytest Windows y anotaciones de Zod, sin fallos.
+
+Documentación de métodos, unidades, referencias, rangos y límites: [analysis.md](analysis.md). Ejemplo reproducible ampliado en `scripts/smoke_audio.py` y ejecutado también por CI. El siguiente entregable es la fase 3: diagnóstico; no se han implementado recomendaciones ni procesamiento de fases posteriores.
+
+Limitaciones: loudness resuelve 0,1 LUFS; true peak es una estimación sin certificación de medidor; PSD omite la cola incompleta y la dinámica agrega intervalos en podcasts largos. El análisis necesita temporalmente otra copia del decodificado y usa ejecución síncrona en un worker con timeout para FFmpeg. Jobs/cancelación de worker pertenecen a la fase 14.
