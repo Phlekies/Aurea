@@ -1,6 +1,11 @@
 /** Spanish labels and units for diagnostic evidence and processing decisions. */
 type FieldFormat = { label: string; unit?: string; digits?: number };
 const fields: Record<string, FieldFormat> = {
+  algorithm: { label: 'Algoritmo' },
+  strength: { label: 'Intensidad' },
+  profile_available: { label: 'Perfil de fondo disponible' },
+  background_seconds: { label: 'Duración del fondo analizado', unit: 's' },
+  noise_profile_reference: { label: 'Referencia del perfil' },
   hard_samples_per_channel: { label: 'Muestras saturadas por canal', digits: 0 },
   near_samples_per_channel: { label: 'Muestras próximas al límite por canal', digits: 0 },
   hard_sample_percent: { label: 'Muestras saturadas', unit: '%' },

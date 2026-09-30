@@ -1,6 +1,6 @@
 """Corrective plan recommendation, non-destructive rendering and processed playback."""
 
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Body, Depends, Request
 from fastapi.responses import FileResponse
@@ -27,9 +27,14 @@ Service = Annotated[ProcessingService, Depends(processing_service)]
 
 
 @router.get("/{asset_id}/processing/plan", response_model=ProcessingPlanResponse)
-def get_plan(asset_id: str, service: Service) -> ProcessingPlan:
+def get_plan(
+    asset_id: str,
+    service: Service,
+    algorithm: Literal["spectral_subtraction", "spectral_gate", "wiener"] = "wiener",
+    strength: Literal["light", "balanced", "strong"] = "balanced",
+) -> ProcessingPlan:
     """Recommend an explainable corrective chain from the stored analysis."""
-    return service.recommend(asset_id)
+    return service.recommend(asset_id, algorithm, strength)
 
 
 @router.post("/{asset_id}/process", response_model=ProcessingReportResponse)

@@ -25,7 +25,7 @@ const metricsSchema = z.object({
 });
 const reportSchema = z.object({
   audio_id: z.string().regex(/^[a-f0-9]{32}$/),
-  pipeline_version: z.literal('0.6.0'),
+  pipeline_version: z.literal('0.7.0'),
   plan: planSchema,
   steps: z.array(z.object({
     processor: z.string().min(1), enabled: z.boolean(),
@@ -38,6 +38,12 @@ const reportSchema = z.object({
   processing_seconds: z.number().finite().nonnegative(),
   real_time_factor: z.number().finite().nonnegative(),
   before: metricsSchema, after: metricsSchema,
+  artifacts: z.object({
+    total_reduction_db: decibels, speech_energy_loss_db: decibels,
+    background_reduction_db: decibels,
+    musical_noise_score: z.number().finite().min(0).max(1).nullable(),
+    excessive_reduction: z.boolean(), significant_speech_loss: z.boolean(), possible_musical_noise: z.boolean(),
+  }).nullable(),
 }).refine((report) => report.steps.length === report.plan.steps.length
   && report.before.dc_offset.length === report.channels && report.after.dc_offset.length === report.channels);
 

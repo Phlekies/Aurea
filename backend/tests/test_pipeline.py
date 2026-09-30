@@ -53,7 +53,7 @@ def _run(tmp_path: Path, samples: NDArray[np.float64], plan: ProcessingPlan) -> 
 
 def test_registry_creates_known_processors_and_rejects_duplicates() -> None:
     registry = default_registry()
-    assert registry.names() == ("dc_removal", "high_pass", "dehum", "pre_gain")
+    assert registry.names() == ("dc_removal", "high_pass", "dehum", "pre_gain", "noise_reduction")
     assert registry.create("pre_gain").name == "pre_gain"
     with pytest.raises(ValueError):
         registry.create("reverb")

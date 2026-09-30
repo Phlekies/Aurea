@@ -60,7 +60,7 @@ def test_recommended_rendering_removes_hum_and_dc_without_touching_the_original(
         response = client.post(f"/api/audio/{asset_id}/process")
         assert response.status_code == 200, response.text
         report = response.json()
-        assert report["pipeline_version"] == "0.6.0" and report["plan"]["steps"] == plan["steps"]
+        assert report["pipeline_version"] == "0.7.0" and report["plan"]["steps"] == plan["steps"]
         assert "hum" in report["before"]["detected"] and "hum" not in report["after"]["detected"]
         assert abs(report["after"]["dc_offset"][0]) < 1e-4 < abs(report["before"]["dc_offset"][0])
         assert report["warnings"] == [] and report["safety_gain_db"] == 0
@@ -68,6 +68,7 @@ def test_recommended_rendering_removes_hum_and_dc_without_touching_the_original(
             "dc_removal",
             "high_pass",
             "dehum",
+            "noise_reduction",
             "pre_gain",
         ]
         assert all(step["seconds"] >= 0 for step in report["steps"])
@@ -149,7 +150,9 @@ def test_rendering_failure_is_safe_and_retry_succeeds(
         assert client.post(f"/api/audio/{asset_id}/process").status_code == 200
 
 
-@pytest.mark.parametrize("damage", ["version", "missing_file", "invalid_json"])
+@pytest.mark.parametrize(
+    "damage", ["version", "missing_file", "invalid_json", "duration", "timing", "execution"]
+)
 def test_stale_or_damaged_rendering_is_not_served(storage: Path, damage: str) -> None:
     with TestClient(create_app(Settings(storage_dir=storage))) as client:
         asset_id = _ready(client, _episode())
@@ -164,10 +167,48 @@ def test_stale_or_damaged_rendering_is_not_served(storage: Path, damage: str) ->
                 (output / "playback.wav").unlink()
             case "invalid_json":
                 (output / "report.json").write_text("{", encoding="utf-8")
+            case "duration" | "timing" | "execution":
+                report = json.loads((output / "report.json").read_text(encoding="utf-8"))
+                if damage == "duration":
+                    report["duration_seconds"] += 1
+                elif damage == "timing":
+                    report["steps"][0]["seconds"] = -1
+                else:
+                    report["steps"][0]["enabled"] = not report["steps"][0]["enabled"]
+                (output / "report.json").write_text(json.dumps(report), encoding="utf-8")
         assert client.get(f"/api/audio/{asset_id}/processing").status_code == 404
         assert client.get(f"/api/audio/{asset_id}/processed/stream").status_code == 404
         assert client.post(f"/api/audio/{asset_id}/process").status_code == 200
         assert client.get(f"/api/audio/{asset_id}/processing").status_code == 200
+
+
+def test_publication_failure_restores_previous_render(
+    storage: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with TestClient(create_app(Settings(storage_dir=storage))) as client:
+        asset_id = _ready(client, _episode())
+        previous = client.post(f"/api/audio/{asset_id}/process").json()
+        old_audio = (storage / asset_id / "processed" / "processed.wav").read_bytes()
+        plan = json.loads(json.dumps(previous["plan"]))
+        plan["steps"][-1]["enabled"] = True
+        plan["steps"][-1]["parameters"] = {"gain_db": -4.0}
+        original_replace = Path.replace
+
+        def fail_publication(path: Path, target: str | Path) -> Path:
+            if path.name == "processed" and path.parent.name.startswith(".processing-"):
+                raise OSError("Synthetic publication failure")
+            return original_replace(path, target)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(Path, "replace", fail_publication)
+            assert (
+                client.post(f"/api/audio/{asset_id}/process", json={"plan": plan}).status_code
+                == 503
+            )
+        assert client.get(f"/api/audio/{asset_id}/processing").json() == previous
+        assert (storage / asset_id / "processed" / "processed.wav").read_bytes() == old_audio
+        assert not list(storage.glob(".processing-*"))
+        assert client.post(f"/api/audio/{asset_id}/process", json={"plan": plan}).status_code == 200
 
 
 def test_hidden_but_unrepaired_clipping_stays_reported(storage: Path) -> None:

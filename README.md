@@ -2,7 +2,7 @@
 
 Restauración y mastering explicable para podcasts. El objetivo es **analizar → diagnosticar → recomendar → procesar → comparar → exportar**, conservando siempre el audio original.
 
-**Estado: fase 5 implementada (v0.6.0).** Sube WAV, FLAC, MP3, M4A u OGG, escucha la grabación y pulsa **Analizar grabación** para obtener métricas, un diagnóstico explicable y la separación entre voz y ruido de fondo. Se comprueban clipping, zumbido de 50/60 Hz, ruido grave, nivel bajo, poco headroom, ruido estacionario, sibilancia y plosivas. Cada resultado incluye mensaje, evidencia, severidad, confianza heurística y parámetros. Un VAD con histéresis dibuja la línea temporal de voz, fondo y silencio; las pausas producen un perfil de ruido (nivel, suelo, espectro y estabilidad) y una SNR aproximada. El informe completo se puede descargar en JSON. A partir del diagnóstico, Aurea recomienda una cadena correctiva explicable: eliminación de DC, filtro paso alto con el corte mínimo que elimina el ruido grave, eliminación de zumbido 50/60 Hz y ajuste de nivel. Puedes activar o desactivar cada paso, escuchar la versión corregida y comparar las mediciones antes y después. El original nunca se modifica. La reducción de ruido, el nivelado y el mastering llegarán en las fases siguientes.
+**Estado: fase 6 implementada (v0.7.0).** Sube WAV, FLAC, MP3, M4A u OGG, escucha la grabación y pulsa **Analizar grabación** para obtener métricas, un diagnóstico explicable y la separación entre voz y ruido de fondo. Se comprueban clipping, zumbido de 50/60 Hz, ruido grave, nivel bajo, poco headroom, ruido estacionario, sibilancia y plosivas. Cada resultado incluye mensaje, evidencia, severidad, confianza heurística y parámetros. Un VAD con histéresis dibuja la línea temporal de voz, fondo y silencio; las pausas producen un perfil de ruido (nivel, suelo, espectro y estabilidad) y una SNR aproximada. El informe completo se puede descargar en JSON. A partir del diagnóstico, Aurea recomienda una cadena correctiva explicable: eliminación de DC, filtro paso alto con el corte mínimo que elimina el ruido grave, eliminación de zumbido 50/60 Hz y ajuste de nivel. Puedes activar o desactivar cada paso, escuchar la versión corregida y comparar las mediciones antes y después. El original nunca se modifica. La reducción de ruido ofrece sustracción espectral, puerta espectral y Wiener, con intensidad suave, equilibrada o intensa y controles de posibles artefactos. El nivelado y el mastering llegarán en las fases siguientes.
 
 La interfaz utiliza la paleta definitiva **Claridad Acústica**: azul noche `#0B132B`, cian `#00E5FF`, turquesa `#1DE9B6`, gris azulado `#3A506B` y texto blanco `#FFFFFF`.
 
@@ -108,7 +108,7 @@ Se admiten dos ingestas y un análisis simultáneo por proceso; exceder esa capa
 `GET /health` devuelve HTTP 200:
 
 ```json
-{"status":"ok","service":"aurea","version":"0.6.0"}
+{"status":"ok","service":"aurea","version":"0.7.0"}
 ```
 
 El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamiento ni procesamiento DSP.
@@ -147,7 +147,9 @@ Los informes anteriores a v0.6.0 se recalculan al pulsar **Analizar grabación**
 
 ## Roadmap
 
-Consulta el [plan completo](podcast_audio_doctor_project_plan.md) y el [estado de implementación](docs/progress.md). El siguiente entregable es la fase 6: reducción de ruido DSP (sustracción espectral, puerta espectral y Wiener) con niveles light, balanced y strong.
+Consulta el [plan completo](podcast_audio_doctor_project_plan.md) y el [estado de implementación](docs/progress.md). El siguiente entregable es la fase 7: nivelado de voz y compresión.
 
 Fuentes de implementación: [Vite](https://vite.dev/guide/), [testing de FastAPI](https://fastapi.tiangolo.com/tutorial/testing/) y [Vitest](https://vitest.dev/guide/).
 Audio: [archivos en FastAPI](https://fastapi.tiangolo.com/tutorial/request-files/), [protocolos FFmpeg](https://ffmpeg.org/ffmpeg-protocols.html), [selección de pistas FFmpeg](https://ffmpeg.org/ffmpeg.html), [SoundFile](https://python-soundfile.readthedocs.io/) y [WaveSurfer](https://wavesurfer.xyz/).
+
+Métodos, presets, benchmark y límites de reducción de ruido: [noise-reduction.md](docs/noise-reduction.md).

@@ -1,6 +1,6 @@
 """Deterministic, centralized rules that turn an analysis into a processing plan.
 
-Pipeline version 0.6.0 covers the corrective stage only, in this order:
+Pipeline version 0.7.0 covers the corrective stage only, in this order:
 DC removal -> high-pass -> de-hum -> pre-gain. Every step is always present so the
 user sees what was considered; ``enabled`` is false when no evidence supports it.
 Diagnostics below ``MIN_CONFIDENCE`` never enable a step (confidence gating).
@@ -24,7 +24,7 @@ from app.domain.analysis import AudioAnalysis
 from app.domain.diagnostics import Diagnostic
 from app.domain.processing import ParameterValue, ProcessingPlan, ProcessingStep
 
-PLAN_VERSION = "0.6.0"
+PLAN_VERSION = "0.7.0"
 
 
 @dataclass(frozen=True)

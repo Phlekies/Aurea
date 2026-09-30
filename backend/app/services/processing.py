@@ -23,6 +23,7 @@ import soundfile as sf
 from pydantic import TypeAdapter
 
 from app.analysis.analyzer import analyze_audio
+from app.analysis.artifacts import measure_artifacts
 from app.audio.ffmpeg import create_playback
 from app.audio.waveform import create_waveform
 from app.diagnostics.engine import diagnose_audio
@@ -41,12 +42,12 @@ from app.domain.processing import (
     ProcessingPlan,
     ProcessingReport,
 )
-from app.pipeline.decision_engine import recommend_corrective_plan
+from app.pipeline.noise_plan import recommend_processing_plan
 from app.pipeline.registry import ProcessorRegistry, default_registry
 from app.pipeline.runner import PreparedStep, prepare, run_plan
 from app.services.analysis import AnalysisService
 
-PIPELINE_VERSION = "0.6.0"
+PIPELINE_VERSION = "0.7.0"
 logger = logging.getLogger("aurea.processing")
 STAGING_ID = re.compile(r"^\.processing-[a-f0-9]{32}$")
 # Damage that level or filter changes can hide from a detector but never repair.
@@ -105,9 +106,11 @@ class ProcessingService:
         self._active_staging: set[Path] = set()
         self._staging_lock = threading.Lock()
 
-    def recommend(self, asset_id: str) -> ProcessingPlan:
+    def recommend(
+        self, asset_id: str, algorithm: str = "wiener", strength: str = "balanced"
+    ) -> ProcessingPlan:
         """Recommended corrective plan; requires a current analysis report."""
-        return recommend_corrective_plan(self.analysis_service.get(asset_id))
+        return recommend_processing_plan(self.analysis_service.get(asset_id), algorithm, strength)
 
     def report(self, asset_id: str) -> ProcessingReport:
         """Published processing manifest, without starting any rendering."""
@@ -133,7 +136,7 @@ class ProcessingService:
         """Render ``plan`` (or the recommended plan) and publish it with its manifest."""
         asset = self._asset(asset_id)
         analysis = self.analysis_service.get(asset_id)
-        requested = plan or recommend_corrective_plan(analysis)
+        requested = plan or recommend_processing_plan(analysis)
         prepared = prepare(requested, self.registry, asset.sample_rate, asset.channels)
         requested = replace(
             requested,
@@ -167,7 +170,6 @@ class ProcessingService:
             waveform = create_waveform(rendered)
             (output / "waveform.json").write_bytes(self.waveform_adapter.dump_json(waveform))
             create_playback(rendered, output / "playback.wav", settings)
-            elapsed = time.perf_counter() - started
             warnings = []
             if result.safety_gain_db:
                 warnings.append(
@@ -176,6 +178,26 @@ class ProcessingService:
                 )
             before = processing_metrics(analysis)
             after_metrics = processing_metrics(after)
+            artifacts = (
+                measure_artifacts(snapshot, rendered, analysis.speech_activity)
+                if any(step.enabled and step.processor == "noise_reduction" for step in prepared)
+                else None
+            )
+            if artifacts:
+                if artifacts.significant_speech_loss:
+                    warnings.append(
+                        "La energía de las regiones de voz baja más de 6 dB. "
+                        "Prueba una intensidad menor y escucha la voz."
+                    )
+                if artifacts.excessive_reduction:
+                    warnings.append(
+                        "La energía total baja más de 18 dB; puede haber una reducción excesiva."
+                    )
+                if artifacts.possible_musical_noise:
+                    warnings.append(
+                        "Aumentan los picos espectrales aislados del fondo; posible ruido musical. "
+                        "Compara escuchando las pausas."
+                    )
             for code, name in UNREPAIRED_DAMAGE.items():
                 if code in before.detected and code not in after_metrics.detected:
                     after_metrics = replace(after_metrics, detected=[*after_metrics.detected, code])
@@ -183,6 +205,7 @@ class ProcessingService:
                         f"La {name} del original no se repara en esta versión: un cambio de "
                         "nivel puede ocultarla al detector, pero las crestas siguen recortadas."
                     )
+            elapsed = time.perf_counter() - started
             report = ProcessingReport(
                 audio_id=asset_id,
                 pipeline_version=PIPELINE_VERSION,
@@ -200,6 +223,7 @@ class ProcessingService:
                 real_time_factor=elapsed / asset.duration_seconds,
                 before=before,
                 after=after_metrics,
+                artifacts=artifacts,
             )
             payload = json.dumps(asdict(report), allow_nan=False, separators=(",", ":"))
             (output / "report.json").write_text(payload, encoding="utf-8")
@@ -260,7 +284,13 @@ class ProcessingService:
         target = self._output(asset_id)
         if target.exists():
             target.replace(staging / "previous")
-        output.replace(target)
+        try:
+            output.replace(target)
+        except OSError:
+            previous = staging / "previous"
+            if previous.exists() and not target.exists():
+                previous.replace(target)
+            raise
         self._asset(asset_id)
 
     def _output(self, asset_id: str) -> Path:
@@ -282,8 +312,19 @@ class ProcessingService:
             report.audio_id != asset.id
             or report.pipeline_version != PIPELINE_VERSION
             or (report.sample_rate, report.channels) != (asset.sample_rate, asset.channels)
+            or abs(report.duration_seconds - asset.duration_seconds) > 1 / asset.sample_rate
+            or (
+                any(step.enabled and step.processor == "noise_reduction" for step in report.steps)
+                != (report.artifacts is not None)
+            )
             or not all((output / name).is_file() for name in files)
         ):
+            return None
+        try:
+            validated = prepare(report.plan, self.registry, asset.sample_rate, asset.channels)
+        except AudioError:
+            return None
+        if not self._same_execution(report, validated):
             return None
         return report
 

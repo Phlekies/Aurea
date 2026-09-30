@@ -73,6 +73,33 @@ class AppliedStep:
 
 
 @dataclass(frozen=True)
+class ArtifactMetrics:
+    """Approximate guards for the whole chain, on the original activity regions."""
+
+    total_reduction_db: float | None
+    speech_energy_loss_db: float | None
+    background_reduction_db: float | None
+    musical_noise_score: float | None
+    excessive_reduction: bool
+    significant_speech_loss: bool
+    possible_musical_noise: bool
+
+    def __post_init__(self) -> None:
+        values = (
+            self.total_reduction_db,
+            self.speech_energy_loss_db,
+            self.background_reduction_db,
+            self.musical_noise_score,
+        )
+        if (
+            any(value is not None and not math.isfinite(value) for value in values)
+            or self.musical_noise_score is not None
+            and not 0 <= self.musical_noise_score <= 1
+        ):
+            raise ValueError("Invalid artifact metrics")
+
+
+@dataclass(frozen=True)
 class ProcessingReport:
     """Manifest of one processed rendering: plan, timings, warnings and before/after."""
 
@@ -89,3 +116,22 @@ class ProcessingReport:
     real_time_factor: float
     before: ProcessingMetrics
     after: ProcessingMetrics
+    artifacts: ArtifactMetrics | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            self.sample_rate < 8000
+            or self.channels not in (1, 2)
+            or not math.isfinite(self.duration_seconds)
+            or self.duration_seconds <= 0
+            or not math.isfinite(self.safety_gain_db)
+            or self.safety_gain_db > 0
+            or not math.isfinite(self.processing_seconds)
+            or self.processing_seconds < 0
+            or not math.isfinite(self.real_time_factor)
+            or self.real_time_factor < 0
+            or len(self.steps) != len(self.plan.steps)
+            or any(not math.isfinite(step.seconds) or step.seconds < 0 for step in self.steps)
+            or any(len(metrics.dc_offset) != self.channels for metrics in (self.before, self.after))
+        ):
+            raise ValueError("Invalid processing report")

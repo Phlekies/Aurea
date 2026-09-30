@@ -15,10 +15,13 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
+from scipy.signal import sosfreqz
 
 from app.domain.errors import InvalidProcessingPlan, ProcessingFailed
 from app.domain.processing import ParameterValue, ProcessingPlan
 from app.pipeline.registry import ProcessorRegistry
+from app.processors.base import Block, BlockProcessor, SosStream
+from app.processors.noise_reduction import NoiseReducer, SpectralStream
 
 BLOCK_FRAMES = 65536
 SAFETY_CEILING_DBFS = -0.1
@@ -48,6 +51,8 @@ def prepare(
 ) -> list[PreparedStep]:
     """Validate every step, enabled or not, against this recording's format."""
     prepared = []
+    if sum(step.processor == "noise_reduction" for step in plan.steps) > 1:
+        raise InvalidProcessingPlan("Solo se admite un reductor de ruido por cadena.")
     for index, step in enumerate(plan.steps):
         try:
             parameters = registry.create(step.processor).validate(
@@ -72,29 +77,65 @@ def run_plan(
     peak = 0.0
     with sf.SoundFile(source) as audio:
         sample_rate, channels, frames = audio.samplerate, audio.channels, len(audio)
-        stages = [
-            (index, registry.create(step.processor).open(step.parameters, sample_rate, channels))
-            for index, step in enumerate(steps)
-            if step.enabled
-        ]
+        stages: list[tuple[int, BlockProcessor]] = []
+        for index, step in enumerate(steps):
+            if not step.enabled:
+                continue
+            processor = registry.create(step.processor)
+            parameters = dict(step.parameters)
+            if isinstance(processor, NoiseReducer):
+                frequencies = np.asarray(parameters["noise_frequencies_hz"], dtype=np.float64)
+                density = np.asarray(parameters["noise_psd_dbfs_per_hz"], dtype=np.float64)
+                # The estimate belongs to the input. Propagate it through earlier
+                # linear stages before comparing it to the corrected signal.
+                for previous_index, previous in stages:
+                    if isinstance(previous, SosStream):
+                        _, response = sosfreqz(previous.sos, worN=frequencies, fs=sample_rate)
+                        density += 20 * np.log10(np.maximum(np.abs(response), 1e-12))
+                    elif steps[previous_index].processor == "pre_gain":
+                        gain = steps[previous_index].parameters["gain_db"]
+                        assert isinstance(gain, int | float)
+                        density += gain
+                    elif steps[previous_index].processor == "dc_removal":
+                        density[0] = -300
+                parameters["noise_psd_dbfs_per_hz"] = np.clip(density, -300, 0).tolist()
+            stages.append((index, processor.open(parameters, sample_rate, channels)))
         written = 0
         with sf.SoundFile(
             raw, "x", samplerate=sample_rate, channels=channels, subtype="FLOAT", format="WAV"
         ) as output:
-            for block in audio.blocks(blocksize=block_frames, dtype="float64", always_2d=True):
-                samples = np.asarray(block, dtype=np.float64)
-                shape = samples.shape
-                for index, stage in stages:
+
+            def transform(samples: Block, start: int = 0) -> Block:
+                for index, stage in stages[start:]:
+                    shape = samples.shape
                     started = time.perf_counter()
                     samples = stage.process(samples)
                     seconds[index] += time.perf_counter() - started
-                    if samples.shape != shape or not np.isfinite(samples).all():
+                    valid_shape = samples.ndim == 2 and samples.shape[1] == channels
+                    if not isinstance(stage, SpectralStream):
+                        valid_shape = valid_shape and samples.shape == shape
+                    if not valid_shape or not np.isfinite(samples).all():
                         raise ProcessingFailed(
                             f"El paso {steps[index].processor} ha generado muestras no válidas."
                         )
-                peak = max(peak, float(np.max(np.abs(samples))))
-                output.write(samples.astype(np.float32))
-                written += len(samples)
+                return samples
+
+            def write(samples: Block) -> None:
+                nonlocal peak, written
+                if len(samples):
+                    peak = max(peak, float(np.max(np.abs(samples))))
+                    output.write(samples.astype(np.float32))
+                    written += len(samples)
+
+            for block in audio.blocks(blocksize=block_frames, dtype="float64", always_2d=True):
+                samples = np.asarray(block, dtype=np.float64)
+                write(transform(samples))
+            for position, (index, stage) in enumerate(stages):
+                if isinstance(stage, SpectralStream):
+                    started = time.perf_counter()
+                    tail = stage.finish()
+                    seconds[index] += time.perf_counter() - started
+                    write(transform(tail, position + 1))
     if written != frames:
         raise ProcessingFailed("La renderización no conserva la duración del audio.")
     safety_gain_db = 0.0

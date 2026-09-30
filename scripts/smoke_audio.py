@@ -132,7 +132,10 @@ def main() -> None:
         assert abs(left["end_seconds"] - right["start_seconds"]) < 1e-6
     assert len(profile["frequencies_hz"]) == len(profile["psd_dbfs_per_hz"])
     if args.activity_demo:
-        assert {segment["label"] for segment in activity["segments"]} == {"speech", "noise"}
+        assert {segment["label"] for segment in activity["segments"]} == {
+            "speech",
+            "noise",
+        }
         assert 40 < activity["speech_percent"] < 90
         assert abs(profile["rms_dbfs"] - 20 * math.log10(0.006)) < 2
         assert 10 < analysis["estimated_snr_db"] < 40
@@ -149,6 +152,7 @@ def main() -> None:
         "dc_removal",
         "high_pass",
         "dehum",
+        "noise_reduction",
         "pre_gain",
     ]
     assert all(step["reason"] for step in plan["steps"])
@@ -160,9 +164,15 @@ def main() -> None:
     )
     with urllib.request.urlopen(request, timeout=180) as response:
         report = json.load(response)
-    assert report["pipeline_version"] == "0.6.0" and report["plan"]["steps"] == plan["steps"]
+    assert report["pipeline_version"] == "0.7.0" and report["plan"]["steps"] == plan["steps"]
     assert report["duration_seconds"] == 3 and report["sample_rate"] == 44100
     assert report["after"]["peak_dbfs"] is None or report["after"]["peak_dbfs"] <= 0
+    if args.activity_demo:
+        assert any(
+            step["processor"] == "noise_reduction" and step["enabled"] for step in report["steps"]
+        )
+        assert report["artifacts"] is not None
+        assert report["artifacts"]["background_reduction_db"] > 2
     if args.diagnostic_demo:
         assert "hum" in report["before"]["detected"] and "hum" not in report["after"]["detected"]
     with urllib.request.urlopen(endpoint + "/processing", timeout=10) as response:

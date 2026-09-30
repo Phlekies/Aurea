@@ -18,4 +18,5 @@ export const processorTitles: Record<string, string> = {
   high_pass: 'Filtro paso alto',
   dehum: 'Eliminar zumbido',
   pre_gain: 'Ajuste de nivel previo',
+  noise_reduction: 'Reducir ruido de fondo',
 };

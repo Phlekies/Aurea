@@ -497,3 +497,9 @@ main { margin-left: 238px; width: calc(100% - 238px); }
   .development-note { gap: 12px; }
   .privacy { font-size: 9px; }
 }
+.noise-controls { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; padding: 1rem; background: var(--panel); border: 1px solid #3A506B; border-radius: 12px; }
+.noise-controls label { display: grid; gap: .4rem; flex: 1 1 200px; font-size: .8rem; }
+.noise-controls select { width: 100%; border: 1px solid #3A506B; border-radius: 8px; background: #0B132B; color: #FFFFFF; padding: .65rem; }
+.noise-controls select:focus-visible { outline: 2px solid #00E5FF; outline-offset: 2px; }
+.noise-controls p { flex-basis: 100%; margin: 0; }
+.noise-quality { font-size: .85rem; padding: 1rem; border: 1px solid #3A506B; border-radius: 12px; }

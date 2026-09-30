@@ -107,7 +107,7 @@ export function AnalysisPanel({ audioId }: { audioId: string }) {
         <div className="band-list">{report.bands.map((band) => <div className="band-item" key={band.name}><span>{band.name} <small>{number(band.low_hz, 0)}–{number(band.high_hz, 0)} Hz</small></span><div className="band-bar"><span style={{ width: `${band.percent}%` }} /></div><strong>{number(band.percent)} %</strong></div>)}</div>
         <p className="analysis-note">DC offset por canal: {report.dc_offset.map((offset) => number(offset, 6)).join(' / ')}. Cruces por cero: {number(report.zero_crossing_rate * report.sample_rate, 1)}/s por canal.</p>
       </details>
-      <p className="analysis-note">El análisis conserva tu grabación original. Siguiente: reducción de ruido.</p>
+      <p className="analysis-note">El análisis conserva tu grabación original. Las correcciones generan una versión aparte.</p>
     </>}
   </section>;
 }

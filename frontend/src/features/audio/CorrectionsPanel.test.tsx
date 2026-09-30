@@ -3,13 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { audioAsset, jsonResponse, processingPlan, processingReport, waveform } from '../../test/fixtures';
 import { CorrectionsPanel } from './CorrectionsPanel';
+import type { ProcessingPlan } from '../../api/processing';
 
 vi.mock('wavesurfer.js', () => ({ default: { create: vi.fn(() => ({ on: vi.fn(), destroy: vi.fn() })) } }));
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-function server(options: { existing?: boolean; process?: () => Response } = {}) {
+function server(options: { existing?: boolean; process?: () => Response; plan?: ProcessingPlan } = {}) {
   const fetch = vi.fn().mockImplementation((url: string) => {
-    if (url.endsWith('/processing/plan')) return Promise.resolve(jsonResponse(processingPlan));
+    if (url.endsWith('/processing/plan')) return Promise.resolve(jsonResponse(options.plan ?? processingPlan));
     if (url.endsWith('/processing')) return Promise.resolve(options.existing ? jsonResponse(processingReport) : jsonResponse({ message: 'Sin versión procesada.' }, 404));
     if (url.endsWith('/processed/waveform')) return Promise.resolve(jsonResponse(waveform));
     if (url.endsWith('/process')) return Promise.resolve(options.process ? options.process() : jsonResponse(processingReport));
@@ -33,6 +34,28 @@ it('lists every recommended step with its reason, parameters and evidence', asyn
   expect(within(dehum).getByText('Contraste de la línea más destacada')).toBeVisible();
   expect(within(screen.getByRole('article', { name: 'Filtro paso alto' })).getByRole('checkbox')).not.toBeChecked();
   expect(screen.getByText(/El original nunca se modifica/)).toBeInTheDocument();
+});
+
+it('changes noise algorithm and intensity without editing DSP parameters', async () => {
+  const plan = { ...processingPlan, steps: [...processingPlan.steps, {
+    processor: 'noise_reduction', enabled: true,
+    parameters: { algorithm: 'wiener', strength: 'balanced', noise_frequencies_hz: [0, 22050], noise_psd_dbfs_per_hz: [-90, -90] },
+    reason: 'Se detectó un fondo estacionario.', source_diagnostic: 'stationary_noise', confidence: .7,
+    evidence: { profile_available: true },
+  }] };
+  const fetch = server({ plan, process: () => jsonResponse({ ...processingReport, artifacts: {
+    total_reduction_db: 3, speech_energy_loss_db: 1, background_reduction_db: 9,
+    musical_noise_score: .01, excessive_reduction: false, significant_speech_loss: false, possible_musical_noise: false,
+  } }) });
+  render(<CorrectionsPanel audioId={audioAsset.id} />);
+  await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Método de reducción' }), 'spectral_gate');
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Intensidad de reducción' }), 'strong');
+  await userEvent.click(screen.getByRole('button', { name: 'Aplicar correcciones' }));
+  const call = fetch.mock.calls.find(([url]) => String(url).endsWith('/process'))!;
+  const sent = JSON.parse(String((call[1] as RequestInit).body));
+  expect(sent.plan.steps.at(-1).parameters).toMatchObject({ algorithm: 'spectral_gate', strength: 'strong' });
+  expect(sent.plan.steps.at(-1).parameters.noise_psd_dbfs_per_hz).toEqual([-90, -90]);
+  expect(await screen.findByLabelText('Comprobaciones de reducción de ruido')).toHaveTextContent('Fondo reducido: 9,0 dB');
 });
 
 it('sends the user-adjusted plan and shows the before/after comparison', async () => {

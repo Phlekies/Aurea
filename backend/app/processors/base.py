@@ -1,8 +1,8 @@
 """Processor contract: the plan's whole-buffer interface plus bounded block streaming.
 
 Every processor implements ``open(params, sample_rate, channels)``, returning a stateful
-block processor. The whole-buffer ``process`` is that same stream applied to one block,
-so the two entry points cannot diverge. Blocks are float64 ``(frames, channels)`` at
+block processor. The whole-buffer ``process`` applies the same stream and, for
+buffered spectral stages, drains its tail. Blocks are float64 ``(frames, channels)`` at
 the native sample rate. Processors never change length, channel count or sample rate;
 IIR state carries across blocks, so results do not depend on block boundaries.
 """
@@ -24,7 +24,7 @@ type Parameters = Mapping[str, ParameterValue]
 
 
 class BlockProcessor(Protocol):
-    """Stateful streaming stage; output has the input's shape."""
+    """Stateful stage. Ordinary stages preserve shape; spectral stages drain a tail."""
 
     def process(self, block: Block) -> Block:
         """Transform the next contiguous block."""

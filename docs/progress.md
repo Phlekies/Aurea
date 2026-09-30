@@ -16,7 +16,7 @@ Aceptación: implementación, pruebas, documentación, ejemplo reproducible, API
 
 ## Siguiente fase
 
-Fase 6 — Reducción de ruido DSP: sustracción espectral, puerta espectral y filtro de Wiener sobre el perfil de ruido, detección de artefactos y niveles light/balanced/strong.
+Fase 7 — Nivelado de voz y compresión: estabilización del nivel hablado y control de dinámica según el plan.
 
 Las fases posteriores siguen el orden del plan. No se considerará terminado un entregable sin pruebas, documentación y comprobaciones de calidad.
 
@@ -84,4 +84,16 @@ Implementado: procesadores registrables `dc_removal`, `high_pass` (Butterworth),
 
 Interfaz: sección «Correcciones» con cada paso activable, su motivo, «¿Por qué?» con diagnóstico de origen, confianza, parámetros y evidencia, reproductor de la versión corregida y tabla antes/después. Revisada en navegador, sin desbordamiento a 390 px. La revisión detectó que bajar el nivel ocultaba la saturación al detector: ahora sigue indicada después, con un aviso, porque no se repara hasta la fase 11.
 
-Verificación local: pruebas de propiedades (forma, frecuencia de muestreo, silencio, independencia de bloques), respuestas medidas (−24,1 dB una octava bajo el corte, −30 dB en cada línea del de-hum), reglas de decisión, protección de pico, fallos seguros, contrato API y caché. Los tres smoke pasan a través del proxy, incluida la eliminación del zumbido de la demo. Renderizar 10 min estéreo a 48 kHz tarda 1,5 s (factor de tiempo real 0,0024). Métodos y límites: [processing.md](processing.md). CI de la fase 5: pendiente.
+Verificación local: pruebas de propiedades (forma, frecuencia de muestreo, silencio, independencia de bloques), respuestas medidas (−24,1 dB una octava bajo el corte, −30 dB en cada línea del de-hum), reglas de decisión, protección de pico, fallos seguros, contrato API y caché. Los tres smoke pasan a través del proxy, incluida la eliminación del zumbido de la demo. Renderizar 10 min estéreo a 48 kHz tarda 1,5 s (factor de tiempo real 0,0024). Métodos y límites: [processing.md](processing.md). [CI de la fase 5](https://github.com/Phlekies/Aurea/actions/runs/36762009499) correcta, comprobada durante la revisión previa a la fase 6.
+
+## Fase 6 — Reducción de ruido DSP completada (v0.7.0)
+
+Revisión previa: base de fase 5 limpia y comprobada con 250 pruebas backend y 73 frontend, tipos, lint y build. Se reforzó la caché de procesado (duración, tiempos, pasos y parámetros ejecutables) y se corrigió un fallo de publicación: si el segundo renombrado falla, se restaura el render anterior en lugar de borrarlo con los temporales. Ambos cambios tienen regresiones.
+
+Implementado: NoiseReducer registrado con sustracción espectral, puerta suave y Wiener decision-directed; presets light/balanced/strong, preservación de fase y enlace estéreo, suelos y suavizado en tiempo/frecuencia. STFT por bloques con vaciado final alineado, sin cambiar duración/canales/muestreo ni acumular un espectrograma. Reutiliza el perfil VAD y lo propaga por los filtros anteriores. La integración real detectó un perfil sin bin Nyquist a 44,1 kHz; la conversión se corrigió y se prueba ahora junto a 16 kHz en las nueve combinaciones de método e intensidad.
+
+Interfaz: selector de método y de intensidad, paso activable con motivo y perfil, reproducción corregida, medidas antes/después y avisos aproximados de ruido musical, reducción excesiva y pérdida de energía en regiones de voz. Mantiene Claridad Acústica. Demo revisada en navegador con los tres métodos; a 390 px no hay desbordamiento horizontal. En la demo de 12 s, Wiener equilibrado reduce el fondo 14,5 dB y la energía de las regiones de voz baja 0,1 dB. Cambiar opciones vuelve a renderizar desde el original; el resultado muestra el método realmente aplicado.
+
+Verificación: 297 pruebas backend y 74 frontend, Ruff/formato, ESLint, mypy estricto, TypeScript y build. Smoke normal, diagnóstico y actividad contra el proxy local correctos; el último exige reducción de fondo. Propiedades comprobadas: identidad y cola de una muestra, 8/16/44,1/96 kHz, estéreo en oposición, independencia de bloques, preservación del original, mejora con referencia sintética, perfiles inválidos y fallos de publicación. Benchmark reproducible de 18 combinaciones sobre ruido blanco y coloreado, con reducción de fondo, error respecto a referencia y tiempo/coste local. Métodos y resultados: [noise-reduction.md](noise-reduction.md). CI de fase 6: pendiente.
+
+Limitaciones: perfil estacionario, VAD y artefactos heurísticos, validación sintética sin evaluación perceptual ni corpus real. Los indicadores comparan la cadena completa sobre las mismas regiones originales y pueden reflejar también la ganancia previa; no miden voz limpia. La sustitución de directorios puede interrumpir una lectura concurrente entre renombrados. Nivelado y mastering quedan para fases 7–8.

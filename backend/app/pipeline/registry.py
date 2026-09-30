@@ -6,6 +6,7 @@ from app.processors.base import StreamingProcessor
 from app.processors.dc_removal import DcRemovalProcessor
 from app.processors.dehum import DeHumProcessor
 from app.processors.highpass import HighPassProcessor
+from app.processors.noise_reduction import NoiseReducer
 from app.processors.pregain import PreGainProcessor
 
 
@@ -36,10 +37,11 @@ class ProcessorRegistry:
 
 
 def default_registry() -> ProcessorRegistry:
-    """Corrective processors available in pipeline version 0.6.0."""
+    """Corrective and spectral processors available in pipeline version 0.7.0."""
     registry = ProcessorRegistry()
     registry.register("dc_removal", DcRemovalProcessor)
     registry.register("high_pass", HighPassProcessor)
     registry.register("dehum", DeHumProcessor)
     registry.register("pre_gain", PreGainProcessor)
+    registry.register("noise_reduction", NoiseReducer)
     return registry

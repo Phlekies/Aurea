@@ -1,4 +1,5 @@
 import type { Diagnostic } from '../api/analysis';
+import type { ProcessingPlan } from '../api/processing';
 
 export const audioConfig = {
   formats: ['wav', 'flac', 'mp3', 'm4a', 'ogg'], max_upload_bytes: 104857600,
@@ -51,8 +52,8 @@ export function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-export const processingPlan = {
-  preset: 'corrective', version: '0.6.0',
+export const processingPlan: ProcessingPlan = {
+  preset: 'corrective', version: '0.7.0',
   steps: [
     { processor: 'dc_removal', enabled: true, parameters: { offsets: [0.02] }, reason: 'Hay desplazamiento de continua.', source_diagnostic: null, confidence: null, evidence: { max_abs_dc_offset: 0.02, threshold: 0.001 } },
     { processor: 'high_pass', enabled: false, parameters: { cutoff_hz: 60, order: 4 }, reason: 'No se ha detectado ruido grave.', source_diagnostic: 'rumble', confidence: 0.6, evidence: { candidate_cutoffs_hz: [60, 70, 80, 100] } },
@@ -62,7 +63,8 @@ export const processingPlan = {
 };
 const metrics = { peak_dbfs: -6, rms_dbfs: -20, integrated_lufs: -18, true_peak_dbtp: -5.8, dc_offset: [0.02], subbass_percent: 12, noise_rms_dbfs: -55, estimated_snr_db: 30, detected: ['hum'] };
 export const processingReport = {
-  audio_id: audioAsset.id, pipeline_version: '0.6.0', plan: processingPlan,
+  artifacts: null,
+  audio_id: audioAsset.id, pipeline_version: '0.7.0', plan: processingPlan,
   steps: processingPlan.steps.map((step) => ({ processor: step.processor, enabled: step.enabled, parameters: step.parameters, seconds: 0.012 })),
   sample_rate: 44100, channels: 1, duration_seconds: 5, safety_gain_db: 0, warnings: [],
   processing_seconds: 0.4, real_time_factor: 0.08,
