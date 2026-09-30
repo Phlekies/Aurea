@@ -3,6 +3,12 @@ services:
     build: ./backend
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - audio-data:/data/audio
+    environment:
+      AUREA_MAX_UPLOAD_BYTES: ${AUREA_MAX_UPLOAD_BYTES:-104857600}
+      AUREA_MAX_DURATION_SECONDS: ${AUREA_MAX_DURATION_SECONDS:-1800}
+      AUREA_RETENTION_SECONDS: ${AUREA_RETENTION_SECONDS:-86400}
   frontend:
     build: ./frontend
     ports:
@@ -12,3 +18,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+volumes:
+  audio-data:

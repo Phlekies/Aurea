@@ -1,24 +1,26 @@
 """Integration tests for the public liveness and OpenAPI contracts."""
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import Settings
 from app.main import create_app
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
+def client(tmp_path: Path) -> Iterator[TestClient]:
     """Use a fresh application and execute its lifecycle for every test."""
-    with TestClient(create_app()) as test_client:
+    with TestClient(create_app(Settings(storage_dir=tmp_path / "assets"))) as test_client:
         yield test_client
 
 
 def test_health_response(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "aurea", "version": "0.1.0"}
+    assert response.json() == {"status": "ok", "service": "aurea", "version": "0.2.0"}
 
 
 def test_health_is_documented(client: TestClient) -> None:
@@ -28,6 +30,6 @@ def test_health_is_documented(client: TestClient) -> None:
 
 
 def test_unknown_route_returns_safe_error(client: TestClient) -> None:
-    response = client.get("/api/audio/nonexistent")
+    response = client.get("/unknown-route")
     assert response.status_code == 404
     assert response.json() == {"detail": "Not Found"}

@@ -19,6 +19,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install pinned dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libsndfile1
           python -m venv .venv
           .venv/bin/python -m pip install -r backend/requirements.lock
           .venv/bin/python -m pip install --no-deps -e backend
@@ -35,6 +37,7 @@ jobs:
           curl --fail http://127.0.0.1:8000/health
           curl --fail http://127.0.0.1:5173/
           curl --fail http://127.0.0.1:5173/health
+          python scripts/smoke_audio.py --base-url http://127.0.0.1:5173
       - name: Collect logs
         if: always()
         run: docker compose logs --no-color

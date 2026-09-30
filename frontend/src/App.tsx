@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, AudioLines, Check, Circle, Headphones, Layers3, ShieldCheck, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { AudioLines, Check, Circle, Headphones, Layers3, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { getHealth } from './api/client';
+import { AudioWorkspace } from './features/audio/AudioWorkspace';
 
 type ServiceState = 'connecting' | 'online' | 'offline';
 
@@ -28,7 +29,7 @@ export function App() {
           <span className="nav-item unavailable"><Headphones size={18} />Mis proyectos<span className="soon">Pronto</span></span>
           <span className="nav-item unavailable"><SlidersHorizontal size={18} />Presets<span className="soon">Pronto</span></span>
         </nav>
-        <div className="sidebar-bottom"><div className="mini-icon"><Sparkles size={18} /></div><strong>Un buen sonido se entiende.</strong><p>Mejora tu audio y descubre el porqué de cada ajuste.</p><span className="version">DESARROLLO · V0.1.0</span></div>
+        <div className="sidebar-bottom"><div className="mini-icon"><Sparkles size={18} /></div><strong>Un buen sonido se entiende.</strong><p>Mejora tu audio y descubre el porqué de cada ajuste.</p><span className="version">DESARROLLO · V0.2.0</span></div>
       </aside>
 
       <main id="studio">
@@ -37,11 +38,7 @@ export function App() {
           <div className="eyebrow"><span />PODCAST AUDIO DOCTOR</div>
           <section className="intro"><h1>Tu voz, en su mejor versión.</h1><p>Menos ruido. Más claridad. Un master equilibrado.<br />Y una explicación de cada cambio.</p></section>
 
-          <section className="studio-card" aria-labelledby="session-title">
-            <div className="card-heading"><div><h2 id="session-title">Todo empieza con tu audio</h2><p>Un espacio para escuchar, entender y mejorar.</p></div><span className="phase-badge">En preparación</span></div>
-            <div className="upload-placeholder"><div className="audio-icon"><AudioLines size={34} strokeWidth={1.5} /></div><h3>El estudio está tomando forma</h3><p>Estamos preparando la carga y reproducción de archivos.<br /> Podrás trabajar con tus grabaciones en la siguiente fase.</p><button disabled className="primary-button">Subir una grabación<ArrowRight size={17} /></button><span className="formats">WAV · FLAC · MP3 · M4A · OGG</span></div>
-            <div className="privacy"><ShieldCheck size={17} /><span>Tu audio original se conservará sin modificar.</span></div>
-          </section>
+          <AudioWorkspace />
 
           <section className="workflow" aria-label="Cómo funciona Aurea">
             <div className="workflow-heading"><h2>Del primer sonido al último detalle</h2><span>EL FLUJO AUREA</span></div>
@@ -52,7 +49,7 @@ export function App() {
             </div>
           </section>
 
-          <footer className="development-note"><div><Check size={15} /><span>Base del proyecto preparada</span></div><div><Circle size={12} /><span>Siguiente: carga y reproducción de audio</span></div>{service === 'offline' && <button onClick={() => { setService('connecting'); setAttempt((value) => value + 1); }}>Reintentar conexión</button>}</footer>
+          <footer className="development-note"><div><Check size={15} /><span>Carga y reproducción disponibles</span></div><div><Circle size={12} /><span>Siguiente: análisis de audio</span></div>{service === 'offline' && <button onClick={() => { setService('connecting'); setAttempt((value) => value + 1); }}>Reintentar conexión</button>}</footer>
         </div>
       </main>
     </div>

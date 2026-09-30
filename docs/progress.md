@@ -16,6 +16,18 @@ Aceptación: implementación, pruebas, documentación, ejemplo reproducible, API
 
 ## Siguiente fase
 
-Fase 1 — Ingesta y representación: validar y decodificar WAV/FLAC/MP3/M4A/OGG, conservar originales, extraer metadatos, generar waveform y reproducir audio.
+Fase 2 — Motor de análisis básico: peak/RMS dBFS, crest factor, DC offset, bandas/espectro/PSD, dinámica y silencio, loudness y true peak; pruebas con señales sintéticas y contratos de análisis.
 
 Las fases posteriores siguen el orden del plan. No se considerará terminado un entregable sin pruebas, documentación y comprobaciones de calidad.
+
+## Fase 1 — Ingesta y representación (v0.2.0)
+
+Implementado: todos los formatos del plan, validación de MIME/extensión/contenido, límites HTTP previos al parser y límites posteriores a decodificación, preservación byte a byte del original, float32 nativo, metadatos persistentes, waveform por bloques, reproducción PCM de 16 bits con HTTP Range y limpieza de temporales por caducidad. Se han añadido `load_audio`, `save_audio`, `convert_to_float`, `to_mono` y `resample`, con pruebas.
+
+Interfaz: selección y arrastre, validación con límites efectivos, estado de carga, cancelación de solicitud, mensajes de error, cambio de grabación, metadatos, waveform, play/pause, seek y velocidad. Verificada en navegador con un clip sintético: reproducción activa, posición de audio y slider sincronizados; vista móvil de 390 px revisada.
+
+Arquitectura: modelos de dominio independientes, rutas Pydantic, servicio por aplicación, publicación atómica en carpetas UUID, originales excluidos de Git. FFmpeg se usa sin shell ni protocolos de red. La copia de reproducción cuantiza a 16 bits; no se aplica restauración, resampling ni mastering durante la ingesta. Los podcasts largos generan picos por bloques sin decodificación completa en el navegador.
+
+Verificación local: 32 pruebas de backend y 19 de frontend correctas, tipos y lint correctos, build correcto, smoke HTTP a través de Vite correcto y npm audit sin alertas. Los casos incluyen silencio, audio no finito, tamaño decodificado y recuperación de capacidad tras errores de limpieza. Pendiente de ejecutar CI y smoke de Docker con esta fase.
+
+Limitaciones: almacenamiento local sin cuentas ni historial de proyectos, 30 minutos/100 MiB por defecto, dos ingestas simultáneas por proceso y cancelación de cliente (no de worker). La retención exige que el proceso esté activo para purgar en el momento programado; al reiniciar se limpia lo pendiente. SoundFile/SciPy no incluyen todos los tipos necesarios: mypy mantiene modo estricto para código propio y excluye únicamente imports sin stubs de esas bibliotecas.

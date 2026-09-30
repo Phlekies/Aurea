@@ -4,13 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aurea-backend"
-version = "0.1.0"
+version = "0.2.0"
 description = "Explainable restoration and mastering for spoken-word audio"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115,<1",
     "pydantic>=2.10,<3",
     "uvicorn>=0.34,<1",
+    "numpy>=2.2,<3",
+    "scipy>=1.15,<2",
+    "soundfile>=0.13,<1",
+    "python-multipart>=0.0.20,<1",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +34,13 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
+
+[[tool.mypy.overrides]]
+module = ["soundfile", "scipy.*"]
+ignore_missing_imports = true
