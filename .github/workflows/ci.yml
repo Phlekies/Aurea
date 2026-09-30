@@ -1,0 +1,44 @@
+name: Quality and Docker smoke test
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install pinned dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r backend/requirements.lock
+          .venv/bin/python -m pip install --no-deps -e backend
+          npm --prefix frontend ci
+      - run: npm run check
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start and wait for healthy services
+        run: docker compose up --build --wait --wait-timeout 180
+      - name: Verify API, frontend, and same-origin proxy
+        run: |
+          curl --fail http://127.0.0.1:8000/health
+          curl --fail http://127.0.0.1:5173/
+          curl --fail http://127.0.0.1:5173/health
+      - name: Collect logs
+        if: always()
+        run: docker compose logs --no-color
+      - name: Clean up
+        if: always()
+        run: docker compose down --volumes
+

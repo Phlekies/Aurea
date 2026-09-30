@@ -1,0 +1,15 @@
+{
+  "name": "aurea",
+  "version": "0.1.0",
+  "private": true,
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "test": "node scripts/tasks.mjs test",
+    "lint": "node scripts/tasks.mjs lint",
+    "typecheck": "node scripts/tasks.mjs typecheck",
+    "check": "node scripts/tasks.mjs check",
+    "dev:backend": "node scripts/tasks.mjs backend",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build"
+  }
+}
