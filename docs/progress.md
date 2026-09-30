@@ -20,7 +20,7 @@ Fase 2 — Motor de análisis básico: peak/RMS dBFS, crest factor, DC offset, b
 
 Las fases posteriores siguen el orden del plan. No se considerará terminado un entregable sin pruebas, documentación y comprobaciones de calidad.
 
-## Fase 1 — Ingesta y representación (v0.2.0)
+## Fase 1 — Ingesta y representación completada (v0.2.0)
 
 Implementado: todos los formatos del plan, validación de MIME/extensión/contenido, límites HTTP previos al parser y límites posteriores a decodificación, preservación byte a byte del original, float32 nativo, metadatos persistentes, waveform por bloques, reproducción PCM de 16 bits con HTTP Range y limpieza de temporales por caducidad. Se han añadido `load_audio`, `save_audio`, `convert_to_float`, `to_mono` y `resample`, con pruebas.
 
@@ -28,6 +28,8 @@ Interfaz: selección y arrastre, validación con límites efectivos, estado de c
 
 Arquitectura: modelos de dominio independientes, rutas Pydantic, servicio por aplicación, publicación atómica en carpetas UUID, originales excluidos de Git. FFmpeg se usa sin shell ni protocolos de red. La copia de reproducción cuantiza a 16 bits; no se aplica restauración, resampling ni mastering durante la ingesta. Los podcasts largos generan picos por bloques sin decodificación completa en el navegador.
 
-Verificación local: 32 pruebas de backend y 19 de frontend correctas, tipos y lint correctos, build correcto, smoke HTTP a través de Vite correcto y npm audit sin alertas. Los casos incluyen silencio, audio no finito, tamaño decodificado y recuperación de capacidad tras errores de limpieza. Pendiente de ejecutar CI y smoke de Docker con esta fase.
+Verificación local: 32 pruebas de backend y 19 de frontend correctas, tipos y lint correctos, build correcto, smoke HTTP a través de Vite correcto y npm audit sin alertas. Los casos incluyen silencio, audio no finito, tamaño decodificado y recuperación de capacidad tras errores de limpieza.
+
+[CI de la fase 1](https://github.com/Phlekies/Aurea/actions/runs/36737166994) correcto: jobs `quality` y `docker` pasan, incluido el smoke que sube audio, recupera metadatos y waveform y comprueba reproducción parcial a través del proxy. La fase cumple implementación, pruebas, documentación, ejemplo reproducible, API, errores, logs, revisión de tipos y lint. Los activos de ingesta serán la entrada del motor de análisis de la fase 2.
 
 Limitaciones: almacenamiento local sin cuentas ni historial de proyectos, 30 minutos/100 MiB por defecto, dos ingestas simultáneas por proceso y cancelación de cliente (no de worker). La retención exige que el proceso esté activo para purgar en el momento programado; al reiniciar se limpia lo pendiente. SoundFile/SciPy no incluyen todos los tipos necesarios: mypy mantiene modo estricto para código propio y excluye únicamente imports sin stubs de esas bibliotecas.
