@@ -33,4 +33,3 @@ const tasks = {
 const task = process.argv[2];
 if (!Object.hasOwn(tasks, task)) throw new Error(`Unknown task: ${task}`);
 tasks[task]();
-

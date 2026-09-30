@@ -41,4 +41,3 @@ jobs:
       - name: Clean up
         if: always()
         run: docker compose down --volumes
-

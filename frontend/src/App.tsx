@@ -39,7 +39,7 @@ export function App() {
 
           <section className="studio-card" aria-labelledby="session-title">
             <div className="card-heading"><div><h2 id="session-title">Todo empieza con tu audio</h2><p>Un espacio para escuchar, entender y mejorar.</p></div><span className="phase-badge">En preparación</span></div>
-            <div className="upload-placeholder"><div className="audio-icon"><AudioLines size={34} strokeWidth={1.5} /></div><h3>El estudio está tomando forma</h3><p>Estamos preparando la carga y reproducción de archivos.<br />Podrás trabajar con tus grabaciones en la siguiente fase.</p><button disabled className="primary-button">Subir una grabación<ArrowRight size={17} /></button><span className="formats">WAV · FLAC · MP3 · M4A · OGG</span></div>
+            <div className="upload-placeholder"><div className="audio-icon"><AudioLines size={34} strokeWidth={1.5} /></div><h3>El estudio está tomando forma</h3><p>Estamos preparando la carga y reproducción de archivos.<br /> Podrás trabajar con tus grabaciones en la siguiente fase.</p><button disabled className="primary-button">Subir una grabación<ArrowRight size={17} /></button><span className="formats">WAV · FLAC · MP3 · M4A · OGG</span></div>
             <div className="privacy"><ShieldCheck size={17} /><span>Tu audio original se conservará sin modificar.</span></div>
           </section>
 

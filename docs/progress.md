@@ -1,6 +1,6 @@
 # Estado del desarrollo
 
-## Fase 0 — Bootstrap (v0.1.0)
+## Fase 0 — Bootstrap completada (v0.1.0)
 
 Implementación: backend FastAPI, contrato `/health`, fábrica de aplicación, React/TypeScript/Vite, cliente HTTP validado con timeout y cancelación, pantalla inicial responsive y recuperación de conexión.
 
@@ -10,7 +10,9 @@ Decisiones: proxy del mismo origen para evitar CORS innecesario; almacenamiento 
 
 Validación local: `npm run check` correcto (Ruff, formato, ESLint, mypy, TypeScript, 3 pruebas de backend, 9 de frontend y build). API directa y proxy `/health`: HTTP 200 con estado `ok`; frontend: HTTP 200. Interfaz revisada en navegador. Instalación reproducida con `npm ci`; npm audit sin alertas. Starlette emite un aviso de deprecación de su cliente httpx, que sigue siendo funcional.
 
-Docker no está instalado en el equipo local. La aceptación de arranque en contenedores queda pendiente del job `docker` de GitHub Actions; no se ha verificado localmente.
+Docker no está instalado en el equipo local. El arranque real en contenedores se ha verificado en [GitHub Actions](https://github.com/Phlekies/Aurea/actions/runs/36730439782): jobs `quality` y `docker` correctos; los servicios arrancan sanos y API, frontend y proxy devuelven HTTP 200. La interfaz también se ha revisado a 390 px de ancho.
+
+Aceptación: implementación, pruebas, documentación, ejemplo reproducible, API, recuperación de errores de conexión, logs HTTP, revisión de tipos y lint completados. La integración DSP no aplica a esta fase porque el pipeline aún no existe.
 
 ## Siguiente fase
 

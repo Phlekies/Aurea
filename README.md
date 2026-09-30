@@ -97,4 +97,3 @@ El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamient
 Consulta el [plan completo](podcast_audio_doctor_project_plan.md) y el [estado de implementación](docs/progress.md). El siguiente entregable es la fase 1: ingesta y representación de audio (`v0.2.0`).
 
 Fuentes de implementación: [Vite](https://vite.dev/guide/), [testing de FastAPI](https://fastapi.tiangolo.com/tutorial/testing/) y [Vitest](https://vitest.dev/guide/).
-
