@@ -83,15 +83,15 @@ it('retains meaningful precision for small detector thresholds', async () => {
   expect(within(card).getByText('0,000001')).toBeVisible();
 });
 
-it('labels the background comparison without presenting it as a measured SNR', async () => {
+it('labels the SNR evidence as an approximation', async () => {
   render(<DiagnosticsPanel diagnostics={withChanges({ stationary_noise: {
     detected: true, severity: .5, confidence: .7,
-    evidence: { speech_to_background_level_gap_db: 14.2 }, parameters: { level_gap_threshold_db: 25 },
+    evidence: { estimated_snr_db: 14.2 }, parameters: { snr_threshold_db: 25, snr_is_estimate: true },
   } })} />);
   const card = screen.getByRole('article', { name: 'Ruido continuo' });
   await userEvent.click(within(card).getByText('Evidencia y parámetros'));
-  expect(within(card).getByText('Diferencia de nivel entre voz y fondo')).toBeVisible();
+  expect(within(card).getByText('SNR aproximada (sin referencia limpia)')).toBeVisible();
   expect(within(card).getByText('14,2 dB')).toBeVisible();
-  expect(within(card).getByText('Diferencia máxima entre voz y fondo')).toBeVisible();
-  expect(within(card).queryByText(/señal\/ruido/)).not.toBeInTheDocument();
+  expect(within(card).getByText('SNR aproximada máxima')).toBeVisible();
+  expect(within(card).getByText('SNR estimada sin referencia limpia')).toBeVisible();
 });

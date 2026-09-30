@@ -21,7 +21,24 @@ export const diagnostics: Diagnostic[] = (['clipping', 'hum', 'rumble', 'low_lev
 }));
 export const analysis = {
   audio_id: audioAsset.id, analyzer_version: '0.3.0', sample_rate: 44100, channels: 1,
-  diagnostics_version: '0.4.0', diagnostics,
+  diagnostics_version: '0.5.0', diagnostics,
+  speech_activity: {
+    detector: 'energy', version: '0.5.0', frame_seconds: .03,
+    speech_seconds: 3, noise_seconds: 1.5, silence_seconds: .5, speech_percent: 60, speech_rms_dbfs: -18,
+    segments: [
+      { label: 'silence', start_seconds: 0, end_seconds: .5 },
+      { label: 'speech', start_seconds: .5, end_seconds: 2 },
+      { label: 'noise', start_seconds: 2, end_seconds: 3.5 },
+      { label: 'speech', start_seconds: 3.5, end_seconds: 5 },
+    ],
+    parameters: { enter_threshold_dbfs: -34, stay_threshold_dbfs: -40, floor_level_dbfs: null },
+  },
+  noise_profile: {
+    frame_count: 50, duration_seconds: 1.5, rms_dbfs: -52, floor_dbfs: -55,
+    spectral_flatness: .6, relative_power_std: .12, spectral_stability: .93,
+    frequencies_hz: [0, 100, 1000, 10000], psd_dbfs_per_hz: [null, -95, -97, -99],
+  },
+  estimated_snr_db: 32.4,
   duration_seconds: 5, peak_dbfs: -6, rms_dbfs: -9, crest_factor_db: 3,
   integrated_lufs: -10, true_peak_dbtp: -5.8, dc_offset: [0], zero_crossing_rate: .02,
   silence_percent: 0, silence_threshold_dbfs: -60,

@@ -9,3 +9,7 @@ export function formatTime(seconds: number): string {
 export function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toLocaleString('es-ES', { maximumFractionDigits: 1 })} MB`;
 }
+
+export function formatNumber(value: number | null, digits = 1): string {
+  return value === null ? '—' : value.toLocaleString('es-ES', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}

@@ -25,6 +25,18 @@ it('rejects numeric strings and non-finite values before graph rendering', async
 
 it.each([
   ['an older diagnosis version', { ...analysis, diagnostics_version: '0.3.0' }],
+  ['a report without speech activity', { ...analysis, speech_activity: undefined }],
+  ['an older activity version', { ...analysis, speech_activity: { ...analysis.speech_activity, version: '0.4.0' } }],
+  ['a timeline gap', { ...analysis, speech_activity: { ...analysis.speech_activity, segments: [
+    { label: 'speech', start_seconds: 0, end_seconds: 2 }, { label: 'noise', start_seconds: 2.5, end_seconds: 5 }] } }],
+  ['unmerged timeline segments', { ...analysis, speech_activity: { ...analysis.speech_activity, segments: [
+    { label: 'noise', start_seconds: 0, end_seconds: 2 }, { label: 'noise', start_seconds: 2, end_seconds: 5 }] } }],
+  ['a timeline shorter than the recording', { ...analysis, speech_activity: { ...analysis.speech_activity, segments: [
+    { label: 'noise', start_seconds: 0, end_seconds: 4 }] } }],
+  ['an unknown activity label', { ...analysis, speech_activity: { ...analysis.speech_activity, segments: [
+    { label: 'music', start_seconds: 0, end_seconds: 5 }] } }],
+  ['a noise spectrum length mismatch', { ...analysis, noise_profile: { ...analysis.noise_profile, psd_dbfs_per_hz: [-90] } }],
+  ['a numeric-string SNR', { ...analysis, estimated_snr_db: '32.4' }],
   ['a report without diagnoses', { ...analysis, diagnostics: undefined }],
   ['an incomplete set of checks', { ...analysis, diagnostics: analysis.diagnostics.slice(1) }],
   ['duplicate detector codes', { ...analysis, diagnostics: [...analysis.diagnostics.slice(0, 7), analysis.diagnostics[0]] }],

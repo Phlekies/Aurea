@@ -2,10 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Activity, Download, LoaderCircle } from 'lucide-react';
 import { analyzeAudio, getAnalysis, type AudioAnalysis } from '../../api/analysis';
 import { ApiError } from '../../api/client';
-import { formatTime } from './format';
+import { formatNumber as number, formatTime } from './format';
+import { ActivityPanel } from './ActivityPanel';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
-
-const number = (value: number | null, digits = 1) => value === null ? '—' : value.toLocaleString('es-ES', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 function Metric({ label, value, unit, description }: { label: string; value: number | null; unit: string; description: string }) {
   return <div className="metric-card"><span className="metric-label">{label}</span><div className="metric-value">{number(value)} <span className="metric-unit">{unit}</span></div><p>{description}</p></div>;
@@ -20,10 +19,13 @@ function SpectrumChart({ report }: { report: AudioAnalysis }) {
   const floor = ceiling - 90;
   const x = (frequency: number) => 45 + Math.log10(Math.max(20, frequency) / 20) / Math.log10(upper / 20) * 540;
   const y = (value: number) => 15 + (ceiling - Math.max(floor, value)) / 90 * 140;
-  const points = frequencies.flatMap((frequency, index) => frequency < 20 || values[index] === null ? [] : [`${x(frequency).toFixed(2)},${y(values[index]!).toFixed(2)}`]).join(' ');
-  return <svg className="spectrum-chart" viewBox="0 0 610 190" role="img" aria-label="Densidad espectral promedio: energía por frecuencia, escala horizontal logarítmica">
+  const line = (hz: number[], db: (number | null)[]) => hz.flatMap((frequency, index) => frequency < 20 || frequency > upper || db[index] === null ? [] : [`${x(frequency).toFixed(2)},${y(db[index]!).toFixed(2)}`]).join(' ');
+  const points = line(frequencies, values);
+  const noise = line(report.noise_profile.frequencies_hz, report.noise_profile.psd_dbfs_per_hz);
+  return <svg className="spectrum-chart" viewBox="0 0 610 190" role="img" aria-label={`Densidad espectral promedio${noise ? ' y perfil del ruido de fondo' : ''}: energía por frecuencia, escala horizontal logarítmica`}>
     {[0, 30, 60, 90].map((offset) => <g key={offset}><line className="chart-grid" x1="45" x2="585" y1={y(ceiling - offset)} y2={y(ceiling - offset)} /><text className="chart-axis" x="36" y={y(ceiling - offset) + 4} textAnchor="end">{ceiling - offset}</text></g>)}
     {[20, 100, 1000, 10000, upper].filter((frequency, index, items) => frequency <= upper && items.indexOf(frequency) === index).map((frequency) => <text className="chart-axis" key={frequency} x={x(frequency)} y="176" textAnchor="middle">{frequency >= 1000 ? `${number(frequency / 1000, 0)}k` : frequency}</text>)}
+    {noise && <polyline className="chart-line noise" points={noise} fill="none" />}
     {points && <polyline className="chart-line" points={points} fill="none" />}
   </svg>;
 }
@@ -81,13 +83,14 @@ export function AnalysisPanel({ audioId }: { audioId: string }) {
   }
 
   return <section className="analysis-section" aria-labelledby="analysis-title" aria-busy={busy || checking}>
-    <div className="analysis-heading"><div><h3 id="analysis-title"><Activity size={17} />Informe de audio</h3><p>{report ? 'Mediciones y diagnóstico de tu grabación original.' : 'Mide la señal y detecta posibles problemas de sonido.'}</p></div>
+    <div className="analysis-heading"><div><h3 id="analysis-title"><Activity size={17} />Informe de audio</h3><p>{report ? 'Mediciones, diagnóstico y actividad de voz de tu grabación original.' : 'Mide la señal, separa la voz del fondo y detecta posibles problemas.'}</p></div>
       {report ? <button className="secondary-button" onClick={() => downloadReport(report)}><Download size={14} />Descargar informe</button> : <button className="primary-button" disabled={busy || checking} onClick={() => void analyze()}>{busy ? <><LoaderCircle size={16} className="loading-spinner" />Analizando…</> : 'Analizar grabación'}</button>}
     </div>
     {busy && <p className="analysis-note" aria-live="polite">Calculando las métricas. Puedes seguir escuchando tu audio.</p>}
     {error && <div role="alert" className="analysis-error">{error}</div>}
     {report && <>
       <DiagnosticsPanel diagnostics={report.diagnostics} />
+      <ActivityPanel report={report} />
       <div className="analysis-grid">
         <Metric label="Loudness integrado" value={report.integrated_lufs} unit="LUFS" description="Nivel percibido a lo largo de la grabación." />
         <Metric label="True peak" value={report.true_peak_dbtp} unit="dBTP" description="Pico estimado entre las muestras digitales." />
@@ -97,12 +100,12 @@ export function AnalysisPanel({ audioId }: { audioId: string }) {
         <Metric label="Silencio" value={report.silence_percent} unit="%" description={`Tiempo bajo ${number(report.silence_threshold_dbfs, 0)} dBFS en ambos canales.`} />
       </div>
       {(report.integrated_lufs === null || report.peak_dbfs === null) && <p className="analysis-note">— indica una medición no definida: silencio o audio insuficiente para medir loudness.</p>}
-      <div className="analysis-charts"><div><h4>Espectro promedio <span>PSD · dBFS/Hz</span></h4><SpectrumChart report={report} /></div><div><h4>Dinámica temporal <span>Pico / RMS · dBFS</span></h4><DynamicsChart report={report} /><p className="analysis-note">Ventanas de {number(report.dynamics.window_ms, 0)} ms. Vista limitada a −60 dBFS; el informe conserva los valores completos.</p></div></div>
+      <div className="analysis-charts"><div><h4>Espectro promedio <span>PSD · dBFS/Hz</span>{report.noise_profile.frame_count > 0 && <span className="chart-legend"><i className="legend-swatch" />Espectro <i className="legend-swatch noise" />Fondo</span>}</h4><SpectrumChart report={report} /></div><div><h4>Dinámica temporal <span>Pico / RMS · dBFS</span></h4><DynamicsChart report={report} /><p className="analysis-note">Ventanas de {number(report.dynamics.window_ms, 0)} ms. Vista limitada a −60 dBFS; el informe conserva los valores completos.</p></div></div>
       <details className="analysis-details"><summary>Bandas de frecuencia y detalles técnicos</summary>
         <div className="band-list">{report.bands.map((band) => <div className="band-item" key={band.name}><span>{band.name} <small>{number(band.low_hz, 0)}–{number(band.high_hz, 0)} Hz</small></span><div className="band-bar"><span style={{ width: `${band.percent}%` }} /></div><strong>{number(band.percent)} %</strong></div>)}</div>
         <p className="analysis-note">DC offset por canal: {report.dc_offset.map((offset) => number(offset, 6)).join(' / ')}. Cruces por cero: {number(report.zero_crossing_rate * report.sample_rate, 1)}/s por canal.</p>
       </details>
-      <p className="analysis-note">El análisis conserva tu grabación original. Siguiente: actividad de voz y perfil de ruido.</p>
+      <p className="analysis-note">El análisis conserva tu grabación original. Siguiente: filtros correctivos.</p>
     </>}
   </section>;
 }

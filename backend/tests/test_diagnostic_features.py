@@ -83,12 +83,15 @@ def test_clean_unit_peak_sinusoid_has_no_flat_top(tmp_path: Path) -> None:
 
 
 def test_opposed_stereo_preserves_native_channel_power(tmp_path: Path) -> None:
-    samples = 0.2 * np.sin(2 * np.pi * 1000 * np.arange(16000) / 16000)
+    time = np.arange(32000) / 16000
+    # Syllable-like pauses give the VAD level contrast; a mid downmix would be silent.
+    samples = 0.2 * np.sin(2 * np.pi * 1000 * time) * ((time % 0.6) < 0.36)
     stereo = np.column_stack((samples, -samples))
     result = extract_features(_write(tmp_path / "opposed.wav", stereo))
-    voiced = [window.voice_power for window in result.windows if window.duration_seconds >= 0.03]
-    assert np.mean(voiced) == pytest.approx(0.02, rel=0.02)
-    assert np.mean([window.power for window in result.windows]) == pytest.approx(0.02, rel=0.03)
+    active = [window for window in result.windows if window.power > 0.01]
+    assert np.mean([window.voice_power for window in active]) == pytest.approx(0.02, rel=0.05)
+    assert np.mean([window.power for window in active]) == pytest.approx(0.02, rel=0.05)
+    assert result.activity.speech_percent > 50
     assert any(window.speech_candidate for window in result.windows)
 
 
@@ -139,7 +142,6 @@ def test_dc_and_bass_voice_do_not_supply_a_hum_fundamental(tmp_path: Path) -> No
     candidate = next(candidate for candidate in result.hum if candidate.base_hz == 50)
     assert candidate.harmonics[0].persistence == 0
     assert candidate.harmonics[0].power < candidate.total_ac_power * 1e-10
-    assert result.noise.window_count == 0
 
 
 def test_constant_dc_does_not_become_low_frequency_or_hum_power(tmp_path: Path) -> None:

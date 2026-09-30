@@ -1,15 +1,17 @@
 """Conservative, explainable signal heuristics; scores are not probabilities.
 
 Thresholds are versioned engineering defaults for spoken-word recordings, not
-clinical labels or calibrated quality scores. Temporal speech candidates are an
-internal spectral proxy: this phase does not expose a VAD or a noise profile.
+clinical labels or calibrated quality scores. Speech windows come from the
+configured voice activity detector and background windows from the frames used
+for the published noise profile (see app.analysis.vad and app.analysis.noise).
 """
 
 import math
 from collections.abc import Callable
 from typing import Protocol
 
-from app.diagnostics.features import DiagnosticFeatures, WindowFeatures
+from app.analysis.frames import WindowFeatures
+from app.diagnostics.features import DiagnosticFeatures
 from app.domain.analysis import AudioAnalysis
 from app.domain.diagnostics import Diagnostic, EvidenceValue
 
@@ -376,12 +378,11 @@ class StationaryNoiseDetector:
     def analyze(self, audio: DiagnosticFeatures, context: AudioAnalysis) -> Diagnostic:
         speech, _ = _evidence_windows(audio)
         noise = audio.noise
-        speech_power = _average_power(speech)
-        level_gap = _db(_ratio(speech_power, noise.power)) if noise.power > 0 else None
+        snr = audio.estimated_snr_db
         noise_db = _db(noise.power)
         evidence: dict[str, EvidenceValue] = {
             "noise_rms_dbfs": noise_db,
-            "speech_to_background_level_gap_db": level_gap,
+            "estimated_snr_db": snr,
             "psd_similarity": noise.psd_stationarity,
             "spectral_flatness": noise.flatness,
             "relative_power_std": noise.relative_power_std,
@@ -397,7 +398,8 @@ class StationaryNoiseDetector:
             "spectral_flatness_threshold": 0.1,
             "maximum_relative_power_std": 0.6,
             "noise_rms_threshold_dbfs": -55.0,
-            "level_gap_threshold_db": 25.0,
+            "snr_threshold_db": 25.0,
+            "snr_is_estimate": True,
             "speech_probability_is_heuristic": True,
             "maximum_silence_percent": 99.0,
         }
@@ -420,12 +422,12 @@ class StationaryNoiseDetector:
         detected = (
             noise_db is not None
             and noise_db >= -55
-            and (level_gap is None or level_gap <= 25)
+            and (snr is None or snr <= 25)
             and noise.psd_stationarity >= 0.8
             and noise.flatness >= 0.1
             and noise.relative_power_std <= 0.6
         )
-        severity = (25 - (level_gap if level_gap is not None else 0)) / 30
+        severity = (25 - (snr if snr is not None else 0)) / 30
         return _result(
             "stationary_noise",
             detected,

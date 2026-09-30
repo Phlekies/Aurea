@@ -80,7 +80,7 @@ def _write(path: Path, samples: NDArray[np.float64], rate: int = RATE) -> Path:
 
 
 def _diagnose(path: Path, samples: NDArray[np.float64], rate: int = RATE) -> dict[str, Diagnostic]:
-    observations = diagnose_audio(_write(path, samples, rate), _context(samples, rate))
+    observations = diagnose_audio(_write(path, samples, rate), _context(samples, rate)).diagnostics
     assert [observation.code for observation in observations] == list(DIAGNOSTIC_CODES)
     for observation in observations:
         assert 0 <= observation.severity <= 1
@@ -110,9 +110,9 @@ def _numbers(diagnostic: Diagnostic, key: str) -> list[float]:
 def test_engine_has_fixed_codes_and_reproducible_explanations(tmp_path: Path) -> None:
     samples = _speech()
     first = _diagnose(tmp_path / "voz.wav", samples)
-    second = diagnose_audio(tmp_path / "voz.wav", _context(samples))
+    second = diagnose_audio(tmp_path / "voz.wav", _context(samples)).diagnostics
     assert list(first.values()) == second
-    assert DIAGNOSTICS_VERSION == "0.4.0"
+    assert DIAGNOSTICS_VERSION == "0.5.0"
     assert all(not result.detected for result in first.values())
 
 
@@ -252,7 +252,7 @@ def test_stationary_background_is_compared_between_quiet_regions(tmp_path: Path)
     assert result.detected
     assert _number(result, "psd_similarity") > 0.8
     assert _number(result, "noise_windows") > 10
-    assert _number(result, "speech_to_background_level_gap_db") < 25
+    assert _number(result, "estimated_snr_db") < 25
 
 
 def test_pure_noise_is_not_claimed_as_speech_noise_comparison(tmp_path: Path) -> None:

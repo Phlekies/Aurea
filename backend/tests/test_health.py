@@ -20,7 +20,7 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
 def test_health_response(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "aurea", "version": "0.4.0"}
+    assert response.json() == {"status": "ok", "service": "aurea", "version": "0.5.0"}
 
 
 def test_health_is_documented(client: TestClient) -> None:

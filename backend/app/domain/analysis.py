@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from app.domain.activity import NoiseProfile, SpeechActivity
 from app.domain.diagnostics import Diagnostic
 
 
@@ -65,3 +66,6 @@ class AudioAnalysis:
     dynamics: Dynamics
     diagnostics_version: str | None = None
     diagnostics: list[Diagnostic] = field(default_factory=list)
+    speech_activity: SpeechActivity | None = None
+    noise_profile: NoiseProfile | None = None
+    estimated_snr_db: float | None = None

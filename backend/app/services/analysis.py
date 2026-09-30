@@ -16,6 +16,7 @@ from uuid import uuid4
 from pydantic import TypeAdapter
 
 from app.analysis.analyzer import ANALYZER_VERSION, analyze_audio
+from app.analysis.vad import ACTIVITY_VERSION
 from app.diagnostics.engine import DIAGNOSTICS_VERSION, diagnose_audio
 from app.domain.analysis import AudioAnalysis
 from app.domain.audio import AudioAsset
@@ -96,14 +97,19 @@ class AnalysisService:
                 timeout_seconds=settings.command_timeout_seconds,
             )
             try:
-                observations = diagnose_audio(snapshot, result)
+                diagnosis = diagnose_audio(snapshot, result)
             except (OSError, ValueError, ArithmeticError) as error:
                 logger.warning("audio_diagnosis_failed id=%s", asset_id)
                 raise AnalysisFailed(
                     "No se pudo completar el diagnóstico. Reintenta dentro de un momento."
                 ) from error
             result = replace(
-                result, diagnostics_version=DIAGNOSTICS_VERSION, diagnostics=observations
+                result,
+                diagnostics_version=DIAGNOSTICS_VERSION,
+                diagnostics=diagnosis.diagnostics,
+                speech_activity=diagnosis.speech_activity,
+                noise_profile=diagnosis.noise_profile,
+                estimated_snr_db=diagnosis.estimated_snr_db,
             )
             if not self._matches(result, asset):
                 raise ValueError("Analysis does not match its source asset")
@@ -116,12 +122,18 @@ class AnalysisService:
             temporary.replace(self.audio_service.directory(asset_id) / "analysis.json")
             self._asset(asset_id)
             logger.info(
-                "audio_analyzed id=%s seconds=%.3f version=%s diagnostics=%s detected=%d",
+                "audio_analyzed id=%s seconds=%.3f version=%s diagnostics=%s detected=%d "
+                "vad=%s speech_percent=%.1f snr_db=%s",
                 asset_id,
                 time.perf_counter() - started,
                 ANALYZER_VERSION,
                 DIAGNOSTICS_VERSION,
-                sum(item.detected for item in observations),
+                sum(item.detected for item in diagnosis.diagnostics),
+                diagnosis.speech_activity.detector,
+                diagnosis.speech_activity.speech_percent,
+                "none"
+                if diagnosis.estimated_snr_db is None
+                else f"{diagnosis.estimated_snr_db:.1f}",
             )
             return result
         except AudioServiceUnavailable as error:
@@ -166,6 +178,7 @@ class AnalysisService:
             and result.analyzer_version == ANALYZER_VERSION
             and result.diagnostics_version == DIAGNOSTICS_VERSION
             and tuple(item.code for item in result.diagnostics) == DIAGNOSTIC_CODES
+            and AnalysisService._activity_matches(result)
             and result.sample_rate == asset.sample_rate
             and result.channels == asset.channels
             and abs(result.duration_seconds - asset.duration_seconds) <= 1 / asset.sample_rate
@@ -266,6 +279,34 @@ class AnalysisService:
                 return False
             expected_start = point.start_seconds + point.duration_seconds
         return abs(expected_start - result.duration_seconds) <= time_tolerance
+
+    @staticmethod
+    def _activity_matches(result: AudioAnalysis) -> bool:
+        """Segments cover the recording exactly; profile and SNR are internally coherent."""
+        activity, profile = result.speech_activity, result.noise_profile
+        if activity is None or profile is None or activity.version != ACTIVITY_VERSION:
+            return False
+        tolerance = 1e-6
+        durations = activity.speech_seconds + activity.noise_seconds + activity.silence_seconds
+        speech = sum(
+            item.end_seconds - item.start_seconds
+            for item in activity.segments
+            if item.label == "speech"
+        )
+        nyquist = result.sample_rate / 2
+        return (
+            abs(activity.segments[0].start_seconds) <= tolerance
+            and abs(activity.segments[-1].end_seconds - result.duration_seconds) <= tolerance
+            and abs(durations - result.duration_seconds) <= tolerance
+            and abs(speech - activity.speech_seconds) <= tolerance
+            and profile.duration_seconds <= activity.noise_seconds + tolerance
+            and all(0 <= value <= nyquist + tolerance for value in profile.frequencies_hz)
+            and all(right > left for left, right in pairwise(profile.frequencies_hz))
+            and (
+                result.estimated_snr_db is None
+                or (math.isfinite(result.estimated_snr_db) and profile.frame_count > 0)
+            )
+        )
 
     def _asset(self, asset_id: str) -> AudioAsset:
         try:

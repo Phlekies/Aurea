@@ -1,17 +1,19 @@
-"""Dependency-free ingestion/diagnosis smoke test for local and Docker APIs."""
+"""Dependency-free ingestion, diagnosis and speech-activity smoke test for local/Docker APIs."""
 
 import argparse
 import io
 import json
 import math
+import random
 import struct
 import urllib.request
 import wave
 from pathlib import Path
 
 
-def sample_audio(seconds: int = 3, diagnostic_demo: bool = False) -> bytes:
+def sample_audio(seconds: int = 3, demo: str | None = None) -> bytes:
     """Generate a deterministic, explicitly synthetic mono sample for reproducible QA."""
+    background = random.Random(2026)
     output = io.BytesIO()
     with wave.open(output, "wb") as audio:
         audio.setnchannels(1)
@@ -21,7 +23,7 @@ def sample_audio(seconds: int = 3, diagnostic_demo: bool = False) -> bytes:
         for frame in range(seconds * 44100):
             t = frame / 44100
             envelope = (0.5 + 0.5 * math.sin(2 * math.pi * 2 * t)) * min(t * 8, 1)
-            if diagnostic_demo:
+            if demo == "diagnostic":
                 # Deliberately clipped synthetic syllables plus a persistent 50 Hz hum.
                 syllable = 0.25 + 0.75 * max(0, math.sin(2 * math.pi * 2 * t))
                 voice = sum(
@@ -29,6 +31,17 @@ def sample_audio(seconds: int = 3, diagnostic_demo: bool = False) -> bytes:
                     for gain, frequency in ((1.2, 180), (0.35, 360), (0.2, 540))
                 )
                 signal = voice * syllable + 0.08 * math.sin(2 * math.pi * 50 * t)
+                value = round(32767 * max(-1, min(1, signal)))
+            elif demo == "activity":
+                # Syllable-like phrases (0.6 s of every second) over a steady hiss.
+                position = t % 1.0
+                phrase = math.sin(math.pi * position / 0.6) ** 0.6 if position < 0.6 else 0.0
+                pitch = 140 + 12 * math.sin(2 * math.pi * 0.7 * t)
+                voice = sum(
+                    math.sin(2 * math.pi * pitch * harmonic * t) / harmonic
+                    for harmonic in range(1, 9)
+                )
+                signal = 0.12 * phrase * voice + background.gauss(0.0, 0.006)
                 value = round(32767 * max(-1, min(1, signal)))
             else:
                 value = int(9000 * envelope * math.sin(2 * math.pi * (220 + 40 * math.sin(t)) * t))
@@ -42,9 +55,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--write-sample", type=Path)
-    parser.add_argument("--diagnostic-demo", action="store_true")
+    demos = parser.add_mutually_exclusive_group()
+    demos.add_argument("--diagnostic-demo", action="store_true")
+    demos.add_argument("--activity-demo", action="store_true")
     args = parser.parse_args()
-    sample = sample_audio(12 if args.write_sample else 3, args.diagnostic_demo)
+    demo = "diagnostic" if args.diagnostic_demo else "activity" if args.activity_demo else None
+    sample = sample_audio(12 if args.write_sample else 3, demo)
     if args.write_sample:
         args.write_sample.parent.mkdir(parents=True, exist_ok=True)
         args.write_sample.write_bytes(sample)
@@ -86,7 +102,7 @@ def main() -> None:
     assert analysis["duration_seconds"] == 3
     assert math.isfinite(analysis["integrated_lufs"])
     assert analysis["peak_dbfs"] < 0 and math.isfinite(analysis["true_peak_dbtp"])
-    assert analysis["diagnostics_version"] == "0.4.0"
+    assert analysis["diagnostics_version"] == "0.5.0"
     expected_codes = {
         "clipping",
         "hum",
@@ -108,6 +124,18 @@ def main() -> None:
         found = {item["code"]: item for item in analysis["diagnostics"]}
         assert found["clipping"]["detected"]
         assert found["hum"]["detected"] and found["hum"]["evidence"]["base_frequency_hz"] == 50
+    activity, profile = analysis["speech_activity"], analysis["noise_profile"]
+    assert activity["version"] == "0.5.0" and activity["segments"][0]["start_seconds"] == 0
+    assert abs(activity["segments"][-1]["end_seconds"] - 3) < 1e-6
+    for left, right in zip(activity["segments"], activity["segments"][1:], strict=False):
+        assert left["label"] != right["label"]
+        assert abs(left["end_seconds"] - right["start_seconds"]) < 1e-6
+    assert len(profile["frequencies_hz"]) == len(profile["psd_dbfs_per_hz"])
+    if args.activity_demo:
+        assert {segment["label"] for segment in activity["segments"]} == {"speech", "noise"}
+        assert 40 < activity["speech_percent"] < 90
+        assert abs(profile["rms_dbfs"] - 20 * math.log10(0.006)) < 2
+        assert 10 < analysis["estimated_snr_db"] < 40
     assert len(analysis["spectrum"]["frequencies_hz"]) == len(
         analysis["spectrum"]["psd_dbfs_per_hz"]
     )
@@ -115,7 +143,7 @@ def main() -> None:
         assert json.load(response) == analysis
     with urllib.request.urlopen(request, timeout=10) as response:
         assert json.load(response) == analysis
-    print("Audio smoke passed: ingestion, streaming, metrics, diagnostics and cached report")
+    print("Audio smoke passed: ingestion, streaming, metrics, diagnostics, activity and cache")
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ import { AnalysisPanel } from './AnalysisPanel';
 
 afterEach(() => vi.unstubAllGlobals());
 
-it('runs analysis on request and shows the metrics and both charts', async () => {
+it('runs analysis on request and shows the metrics, timeline and both charts', async () => {
   vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => Promise.resolve(url.endsWith('/analysis') ? jsonResponse({ message: 'Informe pendiente.' }, 404) : jsonResponse(analysis))));
   render(<AnalysisPanel audioId={audioAsset.id} />);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Analizar grabación' })).toBeEnabled());
@@ -14,8 +14,11 @@ it('runs analysis on request and shows the metrics and both charts', async () =>
   await userEvent.click(screen.getByRole('button', { name: 'Analizar grabación' }));
   expect(await screen.findByText('LUFS')).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Diagnóstico automático' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Voz y ruido de fondo' })).toBeInTheDocument();
   expect(screen.getByText('True peak')).toBeInTheDocument();
-  expect(screen.getAllByRole('img')).toHaveLength(2);
+  expect(screen.getAllByRole('img')).toHaveLength(3);
+  expect(screen.getByRole('img', { name: /Línea temporal de actividad/ })).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: /y perfil del ruido de fondo/ }).querySelectorAll('polyline')).toHaveLength(2);
   expect(screen.getByRole('button', { name: 'Descargar informe' })).toBeEnabled();
 });
 
