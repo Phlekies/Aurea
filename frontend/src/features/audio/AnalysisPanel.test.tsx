@@ -13,6 +13,7 @@ it('runs analysis on request and shows the metrics and both charts', async () =>
   expect(fetch).toHaveBeenCalledTimes(1);
   await userEvent.click(screen.getByRole('button', { name: 'Analizar grabación' }));
   expect(await screen.findByText('LUFS')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Diagnóstico automático' })).toBeInTheDocument();
   expect(screen.getByText('True peak')).toBeInTheDocument();
   expect(screen.getAllByRole('img')).toHaveLength(2);
   expect(screen.getByRole('button', { name: 'Descargar informe' })).toBeEnabled();

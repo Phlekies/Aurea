@@ -47,3 +47,10 @@ class AudioServiceUnavailable(AudioError):
 
     code = "audio_service_unavailable"
     status_code = 503
+
+
+class AnalysisFailed(AudioError):
+    """A diagnostic calculation failed; retry is safe and the original is retained."""
+
+    code = "analysis_failed"
+    status_code = 503

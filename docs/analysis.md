@@ -1,6 +1,6 @@
 # Motor de análisis · v0.3.0
 
-Flujo disponible: carga → audio float32 nativo → análisis → informe persistente → gráficas y descarga JSON. No se modifica el original ni se aplica restauración. La detección de problemas y las recomendaciones pertenecen a la fase 3.
+Flujo disponible: carga → audio float32 nativo → análisis → diagnóstico → informe persistente → gráficas y descarga JSON. No se modifica el original ni se aplica restauración. La fase 3 añade [diagnósticos explicables](diagnostics.md); la recomendación automática de una cadena de procesamiento pertenece a una fase posterior.
 
 ## Métodos y unidades
 
@@ -34,7 +34,7 @@ La memoria del motor depende del bloque de lectura (65536 muestras), no de la du
 
 ## API, caché y errores
 
-`POST /api/audio/{id}/analyze` calcula el informe sin bloquear el event loop y devuelve el objeto `AudioAnalysis`. Un POST repetido reutiliza un informe finito con la misma versión del analizador y los mismos metadatos. `GET /api/audio/{id}/analysis` solo lee; devuelve `analysis_not_found` (404) si todavía no hay informe válido.
+`POST /api/audio/{id}/analyze` calcula el informe sin bloquear el event loop y devuelve el objeto `AudioAnalysis`. Un POST repetido reutiliza un informe finito con las mismas versiones de análisis/diagnóstico y los mismos metadatos. `GET /api/audio/{id}/analysis` solo lee; devuelve `analysis_not_found` (404) si todavía no hay informe válido. En v0.4.0 el informe incluye ocho observaciones en `diagnostics` y `diagnostics_version`; el motor de métricas mantiene su versión `0.3.0` porque sus métodos no han cambiado.
 
 El servicio limita el cálculo a uno simultáneo por proceso. Se analiza una copia temporal del decodificado para que la limpieza de una grabación caducada no invalide una lectura en curso. Se vuelve a comprobar la caducidad antes de publicar y devolver el resultado. El JSON se publica mediante reemplazo atómico; sobrevive al reinicio y caduca con la grabación.
 

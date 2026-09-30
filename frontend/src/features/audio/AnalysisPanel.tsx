@@ -3,6 +3,7 @@ import { Activity, Download, LoaderCircle } from 'lucide-react';
 import { analyzeAudio, getAnalysis, type AudioAnalysis } from '../../api/analysis';
 import { ApiError } from '../../api/client';
 import { formatTime } from './format';
+import { DiagnosticsPanel } from './DiagnosticsPanel';
 
 const number = (value: number | null, digits = 1) => value === null ? '—' : value.toLocaleString('es-ES', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
@@ -80,12 +81,13 @@ export function AnalysisPanel({ audioId }: { audioId: string }) {
   }
 
   return <section className="analysis-section" aria-labelledby="analysis-title" aria-busy={busy || checking}>
-    <div className="analysis-heading"><div><h3 id="analysis-title"><Activity size={17} />Informe de audio</h3><p>{report ? 'Mediciones de tu grabación original.' : 'Mide el nivel, la dinámica y la distribución de energía.'}</p></div>
+    <div className="analysis-heading"><div><h3 id="analysis-title"><Activity size={17} />Informe de audio</h3><p>{report ? 'Mediciones y diagnóstico de tu grabación original.' : 'Mide la señal y detecta posibles problemas de sonido.'}</p></div>
       {report ? <button className="secondary-button" onClick={() => downloadReport(report)}><Download size={14} />Descargar informe</button> : <button className="primary-button" disabled={busy || checking} onClick={() => void analyze()}>{busy ? <><LoaderCircle size={16} className="loading-spinner" />Analizando…</> : 'Analizar grabación'}</button>}
     </div>
     {busy && <p className="analysis-note" aria-live="polite">Calculando las métricas. Puedes seguir escuchando tu audio.</p>}
     {error && <div role="alert" className="analysis-error">{error}</div>}
     {report && <>
+      <DiagnosticsPanel diagnostics={report.diagnostics} />
       <div className="analysis-grid">
         <Metric label="Loudness integrado" value={report.integrated_lufs} unit="LUFS" description="Nivel percibido a lo largo de la grabación." />
         <Metric label="True peak" value={report.true_peak_dbtp} unit="dBTP" description="Pico estimado entre las muestras digitales." />
@@ -100,7 +102,7 @@ export function AnalysisPanel({ audioId }: { audioId: string }) {
         <div className="band-list">{report.bands.map((band) => <div className="band-item" key={band.name}><span>{band.name} <small>{number(band.low_hz, 0)}–{number(band.high_hz, 0)} Hz</small></span><div className="band-bar"><span style={{ width: `${band.percent}%` }} /></div><strong>{number(band.percent)} %</strong></div>)}</div>
         <p className="analysis-note">DC offset por canal: {report.dc_offset.map((offset) => number(offset, 6)).join(' / ')}. Cruces por cero: {number(report.zero_crossing_rate * report.sample_rate, 1)}/s por canal.</p>
       </details>
-      <p className="analysis-note">Este informe describe la señal. El diagnóstico y las recomendaciones llegarán en la siguiente fase.</p>
+      <p className="analysis-note">El análisis conserva tu grabación original. Siguiente: actividad de voz y perfil de ruido.</p>
     </>}
   </section>;
 }

@@ -7,11 +7,13 @@ import { audioConfig, jsonResponse } from './test/fixtures';
 afterEach(() => vi.unstubAllGlobals());
 
 it('shows API availability and enables upload when limits are loaded', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => Promise.resolve(jsonResponse(url === '/health' ? { status: 'ok', service: 'aurea', version: '0.3.0' } : audioConfig))));
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => Promise.resolve(jsonResponse(url === '/health' ? { status: 'ok', service: 'aurea', version: '0.4.0' } : audioConfig))));
   render(<App />);
   expect(screen.getByRole('status')).toHaveTextContent('Conectando');
   expect(await screen.findByText('Servicio conectado')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Subir una grabación/ })).toBeEnabled();
+  expect(screen.getByText('DESARROLLO · V0.4.0')).toBeInTheDocument();
+  expect(screen.getByText('Siguiente: actividad de voz y perfil de ruido')).toBeInTheDocument();
 });
 
 it('allows recovery after a connection failure', async () => {

@@ -1,4 +1,4 @@
-"""Dependency-free ingestion/analysis smoke test for local and Docker APIs."""
+"""Dependency-free ingestion/diagnosis smoke test for local and Docker APIs."""
 
 import argparse
 import io
@@ -10,7 +10,7 @@ import wave
 from pathlib import Path
 
 
-def sample_audio(seconds: int = 3) -> bytes:
+def sample_audio(seconds: int = 3, diagnostic_demo: bool = False) -> bytes:
     """Generate a deterministic, explicitly synthetic mono sample for reproducible QA."""
     output = io.BytesIO()
     with wave.open(output, "wb") as audio:
@@ -21,19 +21,30 @@ def sample_audio(seconds: int = 3) -> bytes:
         for frame in range(seconds * 44100):
             t = frame / 44100
             envelope = (0.5 + 0.5 * math.sin(2 * math.pi * 2 * t)) * min(t * 8, 1)
-            value = int(9000 * envelope * math.sin(2 * math.pi * (220 + 40 * math.sin(t)) * t))
+            if diagnostic_demo:
+                # Deliberately clipped synthetic syllables plus a persistent 50 Hz hum.
+                syllable = 0.25 + 0.75 * max(0, math.sin(2 * math.pi * 2 * t))
+                voice = sum(
+                    gain * math.sin(2 * math.pi * frequency * t)
+                    for gain, frequency in ((1.2, 180), (0.35, 360), (0.2, 540))
+                )
+                signal = voice * syllable + 0.08 * math.sin(2 * math.pi * 50 * t)
+                value = round(32767 * max(-1, min(1, signal)))
+            else:
+                value = int(9000 * envelope * math.sin(2 * math.pi * (220 + 40 * math.sin(t)) * t))
             frames.extend(struct.pack("<h", value))
         audio.writeframes(frames)
     return output.getvalue()
 
 
 def main() -> None:
-    """Upload synthetic audio and check the ingestion and analysis HTTP contracts."""
+    """Upload synthetic audio and check ingestion, metrics and diagnostic contracts."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--write-sample", type=Path)
+    parser.add_argument("--diagnostic-demo", action="store_true")
     args = parser.parse_args()
-    sample = sample_audio(12 if args.write_sample else 3)
+    sample = sample_audio(12 if args.write_sample else 3, args.diagnostic_demo)
     if args.write_sample:
         args.write_sample.parent.mkdir(parents=True, exist_ok=True)
         args.write_sample.write_bytes(sample)
@@ -75,6 +86,28 @@ def main() -> None:
     assert analysis["duration_seconds"] == 3
     assert math.isfinite(analysis["integrated_lufs"])
     assert analysis["peak_dbfs"] < 0 and math.isfinite(analysis["true_peak_dbtp"])
+    assert analysis["diagnostics_version"] == "0.4.0"
+    expected_codes = {
+        "clipping",
+        "hum",
+        "rumble",
+        "low_level",
+        "low_headroom",
+        "stationary_noise",
+        "sibilance",
+        "plosives",
+    }
+    assert len(analysis["diagnostics"]) == 8
+    assert {item["code"] for item in analysis["diagnostics"]} == expected_codes
+    for item in analysis["diagnostics"]:
+        assert isinstance(item["detected"], bool)
+        assert 0 <= item["severity"] <= 1 and 0 <= item["confidence"] <= 1
+        assert item["message"] and item["evidence"] and item["parameters"]
+    json.dumps(analysis, allow_nan=False)
+    if args.diagnostic_demo:
+        found = {item["code"]: item for item in analysis["diagnostics"]}
+        assert found["clipping"]["detected"]
+        assert found["hum"]["detected"] and found["hum"]["evidence"]["base_frequency_hz"] == 50
     assert len(analysis["spectrum"]["frequencies_hz"]) == len(
         analysis["spectrum"]["psd_dbfs_per_hz"]
     )
@@ -82,7 +115,7 @@ def main() -> None:
         assert json.load(response) == analysis
     with urllib.request.urlopen(request, timeout=10) as response:
         assert json.load(response) == analysis
-    print("Audio smoke passed: upload, metadata, waveform, streaming and cached analysis")
+    print("Audio smoke passed: ingestion, streaming, metrics, diagnostics and cached report")
 
 
 if __name__ == "__main__":

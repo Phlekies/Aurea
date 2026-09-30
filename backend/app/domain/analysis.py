@@ -1,6 +1,8 @@
 """Finite, transport-independent measurements of a complete decoded recording."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from app.domain.diagnostics import Diagnostic
 
 
 @dataclass(frozen=True)
@@ -61,3 +63,5 @@ class AudioAnalysis:
     bands: list[BandEnergy]
     spectrum: Spectrum
     dynamics: Dynamics
+    diagnostics_version: str | None = None
+    diagnostics: list[Diagnostic] = field(default_factory=list)

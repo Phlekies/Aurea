@@ -22,3 +22,34 @@ it('rejects numeric strings and non-finite values before graph rendering', async
   await expect(getAnalysis(audioAsset.id)).rejects.toMatchObject({ name: 'ApiError' });
   await expect(getAnalysis(audioAsset.id)).rejects.toMatchObject({ name: 'ApiError' });
 });
+
+it.each([
+  ['an older diagnosis version', { ...analysis, diagnostics_version: '0.3.0' }],
+  ['a report without diagnoses', { ...analysis, diagnostics: undefined }],
+  ['an incomplete set of checks', { ...analysis, diagnostics: analysis.diagnostics.slice(1) }],
+  ['duplicate detector codes', { ...analysis, diagnostics: [...analysis.diagnostics.slice(0, 7), analysis.diagnostics[0]] }],
+  ['an unknown detector', { ...analysis, diagnostics: analysis.diagnostics.map((item, index) => index === 0 ? { ...item, code: 'unknown' } : item) }],
+])('rejects %s', async (_label, report) => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(report)));
+  await expect(getAnalysis(audioAsset.id)).rejects.toMatchObject({ name: 'ApiError' });
+});
+
+it.each([
+  { severity: -0.1 }, { severity: 1.1 }, { confidence: -0.1 }, { confidence: 1.1 },
+  { confidence: Infinity }, { severity: NaN }, { detected: 'true' },
+  { evidence: { nested: { invalid: true } } }, { parameters: { invalid: [1, null] } },
+])('rejects invalid diagnostic values: %j', async (change) => {
+  const report = { ...analysis, diagnostics: analysis.diagnostics.map((item, index) => index === 0 ? { ...item, ...change } : item) };
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(report)));
+  await expect(getAnalysis(audioAsset.id)).rejects.toMatchObject({ name: 'ApiError' });
+});
+
+it('preserves detector evidence and parameters in the report', async () => {
+  const report = { ...analysis, diagnostics: analysis.diagnostics.map((item, index) => index === 0 ? {
+    ...item, detected: true, severity: .9, confidence: .8,
+    evidence: { max_hard_run_samples: 8, note: 'Valores observados', per_channel: [4, 8], channels: ['L', 'R'], value: null, available: true },
+    parameters: { threshold: .999 },
+  } : item) };
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(report)));
+  await expect(getAnalysis(audioAsset.id)).resolves.toEqual(report);
+});

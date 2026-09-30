@@ -30,6 +30,6 @@ class AudioConfigResponse(RootModel[AudioConfig]):
 
 
 class AudioAnalysisResponse(RootModel[AudioAnalysis]):
-    """Finite analysis metrics and nullable logarithmic values for silence."""
+    """Finite metrics, nullable logarithmic values, and explainable diagnostics."""
 
     model_config = ConfigDict(allow_inf_nan=False)

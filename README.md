@@ -2,7 +2,7 @@
 
 Restauración y mastering explicable para podcasts. El objetivo es **analizar → diagnosticar → recomendar → procesar → comparar → exportar**, conservando siempre el audio original.
 
-**Estado: fase 2 implementada (v0.3.0).** Sube WAV, FLAC, MP3, M4A u OGG, escucha la grabación y pulsa **Analizar grabación** para obtener niveles, loudness, true peak, silencio, espectro y dinámica. Puedes descargar el informe JSON. El diagnóstico y procesamiento llegarán en las siguientes fases.
+**Estado: fase 3 implementada (v0.4.0).** Sube WAV, FLAC, MP3, M4A u OGG, escucha la grabación y pulsa **Analizar grabación** para obtener métricas y un diagnóstico explicable. Se comprueban clipping, zumbido de 50/60 Hz, ruido grave, nivel bajo, poco headroom, ruido estacionario, sibilancia y plosivas. Cada resultado incluye mensaje, evidencia, severidad, confianza heurística y parámetros. El informe completo se puede descargar en JSON. La separación de voz/ruido y el procesamiento llegarán en sus fases.
 
 La interfaz utiliza la paleta definitiva **Claridad Acústica**: azul noche `#0B132B`, cian `#00E5FF`, turquesa `#1DE9B6`, gris azulado `#3A506B` y texto blanco `#FFFFFF`.
 
@@ -79,6 +79,7 @@ frontend/src/api/            Cliente HTTP con validación de contratos
 backend/app/domain/         AudioBuffer, AudioAsset y errores, independientes de HTTP
 backend/app/audio/          FFmpeg, PCM I/O, conversión y waveform
 backend/app/analysis/       Métricas por bloques, espectro y medición de loudness
+backend/app/diagnostics/    Evidencias de señal y ocho detectores explicables
 backend/app/services/       Ingesta, análisis, caché y almacenamiento temporal
 backend/app/api/            Contratos Pydantic y rutas HTTP
 backend/tests/              Pruebas unitarias y de integración con FFmpeg real
@@ -86,7 +87,7 @@ scripts/                    Calidad y ejemplo reproducible de ingesta
 docs/                       Decisiones y estado de fases
 ```
 
-La fábrica crea servicios independientes por aplicación. El dominio usa dataclasses; Pydantic valida los límites HTTP y la persistencia. Uvicorn registra acceso HTTP; ingesta y análisis registran ID y tiempo de ejecución, sin contenido de audio. El análisis trabaja por bloques sobre una copia del decodificado y guarda el informe de forma atómica. Consulta [métodos, unidades y límites del analizador](docs/analysis.md).
+La fábrica crea servicios independientes por aplicación. El dominio usa dataclasses; Pydantic valida los límites HTTP y la persistencia. Uvicorn registra acceso HTTP; ingesta y análisis registran ID y tiempo de ejecución, sin contenido de audio. El análisis trabaja por bloques sobre una copia del decodificado y guarda métricas y diagnósticos de forma atómica. Consulta [métodos del analizador](docs/analysis.md) y [métodos y límites del diagnóstico](docs/diagnostics.md).
 
 FFmpeg se ejecuta sin shell, con argumentos fijos, protocolo local y formatos limitados. La ingesta conserva los bytes originales, decodifica WAV float32 `(frames, channels)` a la frecuencia nativa, genera picos por bloques y crea una copia WAV de 16 bits compatible con navegadores. La reproducción utiliza HTTP Range y picos precalculados: no decodifica todo el podcast en memoria del navegador.
 
@@ -105,7 +106,7 @@ Se admiten dos ingestas y un análisis simultáneo por proceso; exceder esa capa
 `GET /health` devuelve HTTP 200:
 
 ```json
-{"status":"ok","service":"aurea","version":"0.3.0"}
+{"status":"ok","service":"aurea","version":"0.4.0"}
 ```
 
 El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamiento ni procesamiento DSP.
@@ -117,7 +118,7 @@ El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamient
 | `GET /api/audio/{id}` | Metadatos, fechas de creación/caducidad |
 | `GET /api/audio/{id}/waveform` | Hasta 2048 picos por canal |
 | `GET /api/audio/{id}/stream` | WAV de reproducción; admite Range (206) |
-| `POST /api/audio/{id}/analyze` | Calcula el informe o recupera la caché válida (200) |
+| `POST /api/audio/{id}/analyze` | Calcula métricas y diagnósticos o recupera la caché válida (200) |
 | `GET /api/audio/{id}/analysis` | Recupera el informe ya calculado (200; 404 si falta) |
 
 Errores de dominio: `{ "code": "invalid_audio_file", "message": "…" }`. Estados: 413 para tamaño/duración, 415 para formato/MIME, 422 para audio no válido, 404 para ID ausente, 410 para caducado antes de limpieza y 503 para decodificador/capacidad. Los errores del parser HTTP usan el contrato `detail` de FastAPI.
@@ -129,13 +130,16 @@ Con ambos servidores arrancados, en Windows:
 ```powershell
 .\.venv\Scripts\python.exe scripts/smoke_audio.py --base-url http://127.0.0.1:5173
 .\.venv\Scripts\python.exe scripts/smoke_audio.py --write-sample data/qa/episode-synthetic.wav
+.\.venv\Scripts\python.exe scripts/smoke_audio.py --diagnostic-demo --write-sample data/qa/diagnostic-demo.wav
 ```
 
-En macOS/Linux sustituye el intérprete por `.venv/bin/python`. El primer comando comprueba carga, metadatos, waveform, reproducción parcial, análisis y caché a través del proxy. El segundo crea un clip sintético de 12 segundos para cargarlo desde la interfaz y pulsar **Analizar grabación**; no contiene voz ni audio privado. El smoke test también se ejecuta contra Docker en CI.
+En macOS/Linux sustituye el intérprete por `.venv/bin/python`. El primer comando comprueba carga, metadatos, waveform, reproducción parcial, métricas, los ocho diagnósticos y caché a través del proxy. Los otros comandos crean clips sintéticos de 12 segundos para cargar desde la interfaz y pulsar **Analizar grabación**. La demo de diagnóstico introduce deliberadamente clipping y un tono persistente de 50 Hz; no contiene voz privada ni audio con licencia. Usa `--diagnostic-demo` sin `--write-sample` para ejecutar también el smoke positivo. Ambos casos se comprueban contra Docker en CI.
+
+Los informes anteriores a v0.4.0 se recalculan al pulsar **Analizar grabación**. Las grabaciones conservan su ID y el original; una caché antigua no se presenta como un diagnóstico actualizado.
 
 ## Roadmap
 
-Consulta el [plan completo](podcast_audio_doctor_project_plan.md) y el [estado de implementación](docs/progress.md). El siguiente entregable es la fase 3: diagnóstico automático a partir de las métricas.
+Consulta el [plan completo](podcast_audio_doctor_project_plan.md) y el [estado de implementación](docs/progress.md). El siguiente entregable es la fase 4: actividad de voz y perfil de ruido reproducible.
 
 Fuentes de implementación: [Vite](https://vite.dev/guide/), [testing de FastAPI](https://fastapi.tiangolo.com/tutorial/testing/) y [Vitest](https://vitest.dev/guide/).
 Audio: [archivos en FastAPI](https://fastapi.tiangolo.com/tutorial/request-files/), [protocolos FFmpeg](https://ffmpeg.org/ffmpeg-protocols.html), [selección de pistas FFmpeg](https://ffmpeg.org/ffmpeg.html), [SoundFile](https://python-soundfile.readthedocs.io/) y [WaveSurfer](https://wavesurfer.xyz/).

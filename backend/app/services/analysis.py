@@ -7,7 +7,7 @@ import re
 import shutil
 import threading
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from itertools import pairwise
 from pathlib import Path
@@ -16,9 +16,11 @@ from uuid import uuid4
 from pydantic import TypeAdapter
 
 from app.analysis.analyzer import ANALYZER_VERSION, analyze_audio
+from app.diagnostics.engine import DIAGNOSTICS_VERSION, diagnose_audio
 from app.domain.analysis import AudioAnalysis
 from app.domain.audio import AudioAsset
-from app.domain.errors import AudioError, AudioNotFound, AudioServiceUnavailable
+from app.domain.diagnostics import DIAGNOSTIC_CODES
+from app.domain.errors import AnalysisFailed, AudioError, AudioNotFound, AudioServiceUnavailable
 from app.services.ingestion import AudioService
 
 logger = logging.getLogger("aurea.analysis")
@@ -93,6 +95,16 @@ class AnalysisService:
                 ffmpeg=settings.ffmpeg,
                 timeout_seconds=settings.command_timeout_seconds,
             )
+            try:
+                observations = diagnose_audio(snapshot, result)
+            except (OSError, ValueError, ArithmeticError) as error:
+                logger.warning("audio_diagnosis_failed id=%s", asset_id)
+                raise AnalysisFailed(
+                    "No se pudo completar el diagnóstico. Reintenta dentro de un momento."
+                ) from error
+            result = replace(
+                result, diagnostics_version=DIAGNOSTICS_VERSION, diagnostics=observations
+            )
             if not self._matches(result, asset):
                 raise ValueError("Analysis does not match its source asset")
             payload = json.dumps(asdict(result), allow_nan=False, separators=(",", ":"))
@@ -104,10 +116,12 @@ class AnalysisService:
             temporary.replace(self.audio_service.directory(asset_id) / "analysis.json")
             self._asset(asset_id)
             logger.info(
-                "audio_analyzed id=%s seconds=%.3f version=%s",
+                "audio_analyzed id=%s seconds=%.3f version=%s diagnostics=%s detected=%d",
                 asset_id,
                 time.perf_counter() - started,
                 ANALYZER_VERSION,
+                DIAGNOSTICS_VERSION,
+                sum(item.detected for item in observations),
             )
             return result
         except AudioServiceUnavailable as error:
@@ -150,6 +164,8 @@ class AnalysisService:
         identity_matches = (
             result.audio_id == asset.id
             and result.analyzer_version == ANALYZER_VERSION
+            and result.diagnostics_version == DIAGNOSTICS_VERSION
+            and tuple(item.code for item in result.diagnostics) == DIAGNOSTIC_CODES
             and result.sample_rate == asset.sample_rate
             and result.channels == asset.channels
             and abs(result.duration_seconds - asset.duration_seconds) <= 1 / asset.sample_rate

@@ -16,7 +16,7 @@ Aceptación: implementación, pruebas, documentación, ejemplo reproducible, API
 
 ## Siguiente fase
 
-Fase 3 — Diagnóstico automático: transformar las mediciones de la fase 2 en problemas comprensibles y evidencia.
+Fase 4 — Actividad de voz y perfil de ruido: segmentación temporal reproducible, máscara de voz/no voz y estimación de ruido para reforzar los diagnósticos.
 
 Las fases posteriores siguen el orden del plan. No se considerará terminado un entregable sin pruebas, documentación y comprobaciones de calidad.
 
@@ -49,3 +49,17 @@ Verificación local: `npm run check` correcto; **83 pruebas backend y 27 fronten
 Documentación de métodos, unidades, referencias, rangos y límites: [analysis.md](analysis.md). Ejemplo reproducible ampliado en `scripts/smoke_audio.py` y ejecutado también por CI. [CI de la fase 2](https://github.com/Phlekies/Aurea/actions/runs/36742731656) correcto: `quality` y `docker` pasan, incluido el análisis y la caché a través del proxy. El siguiente entregable es la fase 3: diagnóstico; no se han implementado recomendaciones ni procesamiento de fases posteriores.
 
 Limitaciones: loudness resuelve 0,1 LUFS; true peak es una estimación sin certificación de medidor; PSD omite la cola incompleta y la dinámica agrega intervalos en podcasts largos. El análisis necesita temporalmente otra copia del decodificado y usa ejecución síncrona en un worker con timeout para FFmpeg. Jobs/cancelación de worker pertenecen a la fase 14.
+
+## Fase 3 — Diagnóstico explicable completada (v0.4.0)
+
+Implementado: ocho detectores con el contrato `Detector.analyze(audio, context) -> Diagnostic` y orden estable: clipping, hum, rumble, nivel bajo, poco headroom, ruido estacionario, sibilancia y plosivas. Cada observación incluye `detected`, `severity`, `confidence`, mensaje comprensible, evidencia y parámetros, todos finitos y serializables. El clipping distingue crestas aplanadas y secuencias saturadas de picos sinusoidales aislados; el hum elige automáticamente 50 o 60 Hz comparando líneas con bins vecinos y exige la fundamental; rumble, ruido estacionario, sibilancia y plosivas usan candidatos internos de voz y baja actividad. Una comprobación sin datos suficientes se informa como tal, no como audio correcto.
+
+Integración: el servicio de análisis añade el diagnóstico al mismo informe persistente (`diagnostics_version: "0.4.0"`), invalida cachés antiguas o incoherentes y convierte un fallo del diagnóstico en el error de dominio `analysis_failed` (503) sin tocar el original. El log registra versión y número de detecciones, sin contenido de audio. Interfaz: panel de diagnóstico con problemas ordenados por severidad, nivel de evidencia, comprobaciones sin detección o sin datos, y evidencia/parámetros desplegables con etiquetas y unidades en español.
+
+Cierre de la fase: todas las claves de evidencia y parámetros tienen etiqueta en español (una prueba de backend impide que vuelvan a faltar) y se retiraron etiquetas obsoletas de SNR, que esta fase no presenta como medida. Una línea de 50/60 Hz aislada y persistente (≥20 dB sobre sus vecinos en ≥90 % de las ventanas de 1 s) se detecta ahora como zumbido con confianza reducida; antes exigía el 10 % de la energía total y la demo no mostraba su propio zumbido de 50 Hz. El smoke de la demo comprueba ya saturación y zumbido de 50 Hz.
+
+Verificación local: `npm run check` correcto; **161 pruebas backend y 49 frontend** (210 total), Ruff/formato, ESLint, mypy estricto, TypeScript y build. Las pruebas cubren positivos y confusores de cada detector (seno a escala completa, voz grave de 70/100/120 Hz, ruido continuo, fondo variable, Nyquist de 4 kHz), estéreo en oposición, fronteras de bloque, determinismo, silencio y clips breves, entradas no válidas, fallos del detector y cachés obsoletas. Smoke HTTP normal y de demo a través del proxy de Vite correcto. Interfaz revisada en navegador con la demo (saturación, poco headroom y zumbido de 50 Hz detectados) a tamaño escritorio y 390 px sin desbordamiento horizontal.
+
+Documentación de métodos, umbrales y límites: [diagnostics.md](diagnostics.md). CI de la fase 3: pendiente de ejecutar tras publicar los cambios.
+
+Limitaciones: los scores son heurísticos, no probabilidades calibradas; los detectores de ruido, sibilancia y plosivas pueden confundir música, respiraciones o timbres poco habituales, y se han validado con señales sintéticas, no con un corpus de podcasts reales. Los candidatos de voz son internos; la segmentación voz/no voz y el perfil de ruido reutilizables llegan en la fase 4.

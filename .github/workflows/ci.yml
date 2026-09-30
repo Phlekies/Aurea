@@ -38,6 +38,7 @@ jobs:
           curl --fail http://127.0.0.1:5173/
           curl --fail http://127.0.0.1:5173/health
           python scripts/smoke_audio.py --base-url http://127.0.0.1:5173
+          python scripts/smoke_audio.py --base-url http://127.0.0.1:5173 --diagnostic-demo
       - name: Collect logs
         if: always()
         run: docker compose logs --no-color

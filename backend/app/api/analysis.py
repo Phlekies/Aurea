@@ -1,4 +1,4 @@
-"""Phase 2 analysis requests and persistent metric retrieval."""
+"""Analysis and explainable diagnostic requests with persistent report retrieval."""
 
 from typing import Annotated, cast
 

@@ -2,9 +2,25 @@ import { z } from 'zod';
 import { audioRequest } from './audio';
 
 const decibels = z.number().finite().nullable();
+const diagnosticCode = z.enum(['clipping', 'hum', 'rumble', 'low_level', 'low_headroom', 'stationary_noise', 'sibilance', 'plosives']);
+const diagnosticValue = z.union([
+  z.string(), z.number().finite(), z.boolean(), z.null(),
+  z.array(z.string()), z.array(z.number().finite()),
+]);
+const diagnosticSchema = z.object({
+  code: diagnosticCode,
+  detected: z.boolean(),
+  severity: z.number().finite().min(0).max(1),
+  confidence: z.number().finite().min(0).max(1),
+  message: z.string().min(1),
+  evidence: z.record(z.string(), diagnosticValue),
+  parameters: z.record(z.string(), diagnosticValue),
+});
 const analysisSchema = z.object({
   audio_id: z.string().regex(/^[a-f0-9]{32}$/),
   analyzer_version: z.string().min(1),
+  diagnostics_version: z.literal('0.4.0'),
+  diagnostics: z.array(diagnosticSchema).length(8).refine((items) => new Set(items.map((item) => item.code)).size === 8),
   sample_rate: z.number().int().positive(), channels: z.number().int().min(1).max(2),
   duration_seconds: z.number().positive(),
   peak_dbfs: decibels, rms_dbfs: decibels, crest_factor_db: decibels,
@@ -33,6 +49,7 @@ const analysisSchema = z.object({
   && value.spectrum.frequencies_hz.every((frequency, index, values) => frequency <= value.sample_rate / 2 && (index === 0 || frequency > values[index - 1])));
 
 export type AudioAnalysis = z.infer<typeof analysisSchema>;
+export type Diagnostic = z.infer<typeof diagnosticSchema>;
 
 export function getAnalysis(id: string, signal?: AbortSignal) {
   return audioRequest(`/api/audio/${encodeURIComponent(id)}/analysis`, analysisSchema.refine((value) => value.audio_id === id), { signal });

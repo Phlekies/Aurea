@@ -1,3 +1,5 @@
+import type { Diagnostic } from '../api/analysis';
+
 export const audioConfig = {
   formats: ['wav', 'flac', 'mp3', 'm4a', 'ogg'], max_upload_bytes: 104857600,
   max_duration_seconds: 1800, retention_seconds: 86400,
@@ -12,8 +14,14 @@ export const audioAsset = {
 };
 
 export const waveform = { duration_seconds: 5, sample_rate: 44100, channels: 1, peaks: [[0.1, 0.2, 0.4, 0.2]] };
+export const diagnostics: Diagnostic[] = (['clipping', 'hum', 'rumble', 'low_level', 'low_headroom', 'stationary_noise', 'sibilance', 'plosives'] as const).map((code) => ({
+  code, detected: false, severity: 0, confidence: .8,
+  message: 'No se han observado indicios suficientes en esta comprobación.',
+  evidence: {}, parameters: {},
+}));
 export const analysis = {
   audio_id: audioAsset.id, analyzer_version: '0.3.0', sample_rate: 44100, channels: 1,
+  diagnostics_version: '0.4.0', diagnostics,
   duration_seconds: 5, peak_dbfs: -6, rms_dbfs: -9, crest_factor_db: 3,
   integrated_lufs: -10, true_peak_dbtp: -5.8, dc_offset: [0], zero_crossing_rate: .02,
   silence_percent: 0, silence_threshold_dbfs: -60,

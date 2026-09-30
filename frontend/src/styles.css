@@ -313,6 +313,39 @@ main { margin-left: 238px; width: calc(100% - 238px); }
 .analysis-details { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 16px; }
 .analysis-details summary { font-size: 11px; color: var(--secondary); cursor: pointer; }
 
+.diagnostics-section { margin-bottom: 24px; padding: 18px; border: 1px solid var(--border); background: var(--background); border-radius: 9px; }
+.diagnostics-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.diagnostics-heading h4 { display: flex; align-items: center; gap: 8px; font-family: Manrope, sans-serif; font-size: 14px; margin: 0; }
+.diagnostics-heading h4 svg { color: var(--secondary); flex-shrink: 0; }
+.diagnostics-heading > span { color: var(--muted); font-size: 10px; flex-shrink: 0; }
+.diagnostics-summary { font-size: 12px; margin: 12px 0 6px; }
+.diagnostics-explanation { color: var(--muted); font-size: 11px; line-height: 1.8; margin: 0 0 18px; }
+.diagnostic-list { display: grid; gap: 12px; }
+.diagnostic-card { padding: 16px; min-width: 0; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); }
+.diagnostic-card.detected { border-left: 3px solid var(--secondary); }
+.diagnostic-card.severity-media { border-left-color: var(--primary); }
+.diagnostic-card.severity-alta { border-left-color: var(--danger); }
+.diagnostic-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.diagnostic-card-heading h5 { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 650; margin: 0; }
+.diagnostic-card-heading h5 svg { flex-shrink: 0; color: var(--secondary); }
+.severity-media .diagnostic-card-heading h5 svg { color: var(--primary); }
+.severity-alta .diagnostic-card-heading h5 svg { color: var(--danger); }
+.undetected .diagnostic-card-heading h5 svg { color: var(--muted); }
+.diagnostic-badge { border-radius: 4px; background: var(--surface-raised); padding: 3px 7px; font-size: 9px; color: var(--secondary); flex-shrink: 0; }
+.severity-media .diagnostic-badge { color: var(--primary); }
+.severity-alta .diagnostic-badge { color: var(--danger); }
+.undetected .diagnostic-badge { color: var(--muted); }
+.diagnostic-message { font-size: 11px; line-height: 1.8; margin: 10px 0 0; overflow-wrap: anywhere; }
+.diagnostic-confidence { color: var(--muted); font-size: 10px; margin: 5px 0 0; }
+.diagnostic-details { margin-top: 12px; }
+.diagnostic-details summary, .diagnostic-checks > summary { color: var(--secondary); cursor: pointer; font-size: 11px; }
+.diagnostic-details h6 { font-size: 11px; font-weight: 550; margin: 15px 0 8px; }
+.diagnostic-measurements { display: grid; gap: 8px; margin: 0; }
+.diagnostic-measurements > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; font-size: 10px; }
+.diagnostic-measurements dt { color: var(--muted); overflow-wrap: anywhere; }
+.diagnostic-measurements dd { color: var(--text); margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.diagnostic-checks { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+
 .spectrum-chart, .dynamics-chart {
   display: block;
   width: 100%;
@@ -404,6 +437,11 @@ main { margin-left: 238px; width: calc(100% - 238px); }
   .metric-card { padding: 12px; }
   .metric-value { font-size: 22px; }
   .analysis-charts { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .diagnostics-section { padding: 14px 12px; }
+  .diagnostics-heading { flex-wrap: wrap; gap: 5px; }
+  .diagnostic-card { padding: 12px; }
+  .diagnostic-card-heading { align-items: flex-start; flex-wrap: wrap; gap: 6px; }
+  .diagnostic-measurements > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .spectrum-chart, .dynamics-chart { padding: 8px; }
   .band-item { grid-template-columns: minmax(65px, 1fr) 1.5fr minmax(40px, auto); gap: 8px; }
   .workflow-heading > span { display: none; }
