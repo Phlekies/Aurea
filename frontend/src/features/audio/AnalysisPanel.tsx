@@ -4,6 +4,7 @@ import { analyzeAudio, getAnalysis, type AudioAnalysis } from '../../api/analysi
 import { ApiError } from '../../api/client';
 import { formatNumber as number, formatTime } from './format';
 import { ActivityPanel } from './ActivityPanel';
+import { CorrectionsPanel } from './CorrectionsPanel';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
 
 function Metric({ label, value, unit, description }: { label: string; value: number | null; unit: string; description: string }) {
@@ -91,6 +92,7 @@ export function AnalysisPanel({ audioId }: { audioId: string }) {
     {report && <>
       <DiagnosticsPanel diagnostics={report.diagnostics} />
       <ActivityPanel report={report} />
+      <CorrectionsPanel audioId={report.audio_id} />
       <div className="analysis-grid">
         <Metric label="Loudness integrado" value={report.integrated_lufs} unit="LUFS" description="Nivel percibido a lo largo de la grabación." />
         <Metric label="True peak" value={report.true_peak_dbtp} unit="dBTP" description="Pico estimado entre las muestras digitales." />
@@ -105,7 +107,7 @@ export function AnalysisPanel({ audioId }: { audioId: string }) {
         <div className="band-list">{report.bands.map((band) => <div className="band-item" key={band.name}><span>{band.name} <small>{number(band.low_hz, 0)}–{number(band.high_hz, 0)} Hz</small></span><div className="band-bar"><span style={{ width: `${band.percent}%` }} /></div><strong>{number(band.percent)} %</strong></div>)}</div>
         <p className="analysis-note">DC offset por canal: {report.dc_offset.map((offset) => number(offset, 6)).join(' / ')}. Cruces por cero: {number(report.zero_crossing_rate * report.sample_rate, 1)}/s por canal.</p>
       </details>
-      <p className="analysis-note">El análisis conserva tu grabación original. Siguiente: filtros correctivos.</p>
+      <p className="analysis-note">El análisis conserva tu grabación original. Siguiente: reducción de ruido.</p>
     </>}
   </section>;
 }

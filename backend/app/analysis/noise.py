@@ -10,6 +10,12 @@ frame power coefficient of variation with the mean cosine similarity between PSD
 averaged over consecutive groups of 10 frames. The floor is the 10th percentile of
 selected frame levels; the RMS level is the duration-weighted mean power.
 
+A low-frequency background spectrum (0--300 Hz) uses non-overlapping 0.25 s Hann
+windows taken only from uninterrupted runs of selected frames, giving 4 Hz bins. It
+resolves rumble below 100 Hz, which the 33 Hz bins of 30 ms frames smear through
+window leakage. Recordings without 0.25 s of continuous background have no such
+windows and report ``low_window_count = 0``.
+
 The SNR estimate subtracts noise power from speech-frame power:
 ``10 log10((P_speech - P_noise) / P_noise)``, requiring >=0.3 s of each. Without a
 clean reference it is an approximation, and it is undefined (``None``) when
@@ -34,6 +40,8 @@ TRANSIENT_POWER_RATIO = 4.0
 STABILITY_GROUP_FRAMES = 10
 MIN_STABILITY_GROUP_FRAMES = 5
 MIN_ESTIMATE_SECONDS = 0.3
+LOW_WINDOW_SECONDS = 0.25
+LOW_BAND_MAX_HZ = 300.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +57,36 @@ class NoiseFeatures:
     psd_stationarity: float
     frequencies_hz: tuple[float, ...]
     psd: tuple[float, ...]
+    low_window_count: int
+    low_frequencies_hz: tuple[float, ...]
+    low_psd: tuple[float, ...]
+
+
+class _LowBandSpectrum:
+    """Long-window PSD from contiguous background; memory is one 0.25 s window."""
+
+    def __init__(self, sample_rate: int, channels: int) -> None:
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.length = round(LOW_WINDOW_SECONDS * sample_rate)
+        frequencies = np.arange(self.length // 2 + 1) * sample_rate / self.length
+        self.keep = frequencies <= LOW_BAND_MAX_HZ
+        self.frequencies = frequencies[self.keep]
+        self.total = np.zeros(len(self.frequencies))
+        self.count = 0
+        self.run: NDArray[np.float64] = np.empty((0, channels))
+
+    def add(self, samples: NDArray[np.float64], selected: bool) -> None:
+        """Extend the current background run, or end it at any other frame."""
+        if not selected:
+            self.run = np.empty((0, self.channels))
+            return
+        self.run = np.concatenate((self.run, samples), axis=0)
+        while len(self.run) >= self.length:
+            psd = density(self.run[: self.length], self.sample_rate, self.length)
+            self.total += psd[self.keep]
+            self.count += 1
+            self.run = self.run[self.length :]
 
 
 def select_noise_frames(frames: Sequence[WindowFeatures], labels: Sequence[str]) -> list[bool]:
@@ -87,6 +125,7 @@ def measure_noise(
     similarity_count = 0
     count = 0
     index = 0
+    low_band = _LowBandSpectrum(sample_rate, channels)
 
     def compare_group() -> None:
         nonlocal previous_psd, similarity_sum, similarity_count, group_count
@@ -106,6 +145,7 @@ def measure_noise(
         nonlocal index, count, group_count
         if index >= len(frames):
             raise InvalidAudioFile("El audio ha cambiado durante el diagnóstico.")
+        low_band.add(samples, selected[index])
         if selected[index]:
             psd = density(samples, sample_rate, nfft)
             mean_psd[:] += psd
@@ -149,6 +189,13 @@ def measure_noise(
         psd_stationarity=similarity_sum / similarity_count if similarity_count else 0.0,
         frequencies_hz=tuple(float(value) for value in frequencies),
         psd=tuple(float(value) / count if count else 0.0 for value in mean_psd),
+        low_window_count=low_band.count,
+        low_frequencies_hz=tuple(float(value) for value in low_band.frequencies)
+        if low_band.count
+        else (),
+        low_psd=tuple(float(value) / low_band.count for value in low_band.total)
+        if low_band.count
+        else (),
     )
 
 
@@ -170,6 +217,9 @@ def noise_profile(noise: NoiseFeatures) -> NoiseProfile:
         spectral_stability=noise.psd_stationarity,
         frequencies_hz=list(noise.frequencies_hz),
         psd_dbfs_per_hz=[_db(value) for value in noise.psd],
+        low_window_count=noise.low_window_count,
+        low_frequencies_hz=list(noise.low_frequencies_hz),
+        low_psd_dbfs_per_hz=[_db(value) for value in noise.low_psd],
     )
 
 

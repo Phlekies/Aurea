@@ -1,0 +1,130 @@
+/** Spanish labels and units for diagnostic evidence and processing decisions. */
+type FieldFormat = { label: string; unit?: string; digits?: number };
+const fields: Record<string, FieldFormat> = {
+  hard_samples_per_channel: { label: 'Muestras saturadas por canal', digits: 0 },
+  near_samples_per_channel: { label: 'Muestras próximas al límite por canal', digits: 0 },
+  hard_sample_percent: { label: 'Muestras saturadas', unit: '%' },
+  near_sample_percent: { label: 'Muestras próximas al límite', unit: '%' },
+  max_hard_run_samples: { label: 'Mayor secuencia saturada', unit: 'muestras', digits: 0 },
+  max_near_run_samples: { label: 'Mayor secuencia próxima al límite', unit: 'muestras', digits: 0 },
+  flat_top_samples: { label: 'Muestras en crestas aplanadas', digits: 0 },
+  max_flat_top_run_samples: { label: 'Mayor secuencia aplanada', unit: 'muestras', digits: 0 },
+  base_frequency_hz: { label: 'Frecuencia de red', unit: 'Hz' },
+  harmonic_frequencies_hz: { label: 'Frecuencias de los armónicos', unit: 'Hz' },
+  harmonic_contrast_db: { label: 'Contraste de los armónicos', unit: 'dB' },
+  harmonic_persistence: { label: 'Persistencia de los armónicos (0–1)' },
+  harmonic_energy_percent: { label: 'Energía en los armónicos', unit: '%' },
+  analyzed_windows: { label: 'Ventanas analizadas', digits: 0 },
+  low_band_energy_percent: { label: 'Energía en graves', unit: '%' },
+  low_activity_low_band_percent: { label: 'Graves durante baja actividad', unit: '%' },
+  low_activity_low_rms_dbfs: { label: 'Nivel de graves durante baja actividad', unit: 'dBFS' },
+  low_activity_duration_seconds: { label: 'Duración de baja actividad', unit: 's' },
+  speech_windows: { label: 'Ventanas con actividad compatible con voz', digits: 0 },
+  low_activity_windows: { label: 'Ventanas de baja actividad', digits: 0 },
+  integrated_lufs: { label: 'Loudness integrado', unit: 'LUFS' },
+  rms_dbfs: { label: 'Nivel RMS', unit: 'dBFS' },
+  silence_percent: { label: 'Silencio', unit: '%' },
+  true_peak_dbtp: { label: 'True peak estimado', unit: 'dBTP' },
+  headroom_db: { label: 'Margen hasta el límite digital', unit: 'dB' },
+  noise_rms_dbfs: { label: 'Nivel del posible ruido', unit: 'dBFS' },
+  psd_similarity: { label: 'Similitud espectral (0–1)' },
+  spectral_flatness: { label: 'Planitud espectral (0–1)' },
+  relative_power_std: { label: 'Variación relativa de energía' },
+  noise_windows: { label: 'Ventanas de posible ruido', digits: 0 },
+  estimated_snr_db: { label: 'SNR aproximada (sin referencia limpia)', unit: 'dB' },
+  event_count: { label: 'Eventos detectados', digits: 0 },
+  event_times_seconds: { label: 'Instantes de los eventos', unit: 's' },
+  max_band_energy_percent: { label: 'Mayor proporción de energía en la banda', unit: '%' },
+  background_sibilance_rms_dbfs: { label: 'Nivel de agudos en el fondo', unit: 'dBFS' },
+  minimum_duration_seconds: { label: 'Duración mínima', unit: 's' },
+  band_low_hz: { label: 'Límite inferior de la banda', unit: 'Hz' },
+  band_high_hz: { label: 'Límite superior de la banda', unit: 'Hz' },
+  hard_amplitude_threshold: { label: 'Umbral de amplitud saturada (0–1)' },
+  near_amplitude_threshold: { label: 'Umbral de proximidad al límite (0–1)' },
+  flat_top_difference_threshold: { label: 'Diferencia máxima entre muestras aplanadas', digits: 6 },
+  minimum_flat_top_run_samples: { label: 'Secuencia aplanada mínima', unit: 'muestras', digits: 0 },
+  near_concentration_threshold_percent: { label: 'Umbral de concentración cerca del límite', unit: '%' },
+  minimum_near_run_samples: { label: 'Secuencia mínima cerca del límite', unit: 'muestras', digits: 0 },
+  full_confidence_minimum_duration_seconds: { label: 'Duración mínima para evidencia completa', unit: 's' },
+  candidate_frequencies_hz: { label: 'Frecuencias de red comprobadas', unit: 'Hz' },
+  harmonic_contrast_threshold_db: { label: 'Contraste mínimo de los armónicos', unit: 'dB' },
+  harmonic_persistence_threshold: { label: 'Persistencia mínima de los armónicos (0–1)' },
+  minimum_harmonic_energy_percent: { label: 'Energía mínima en los armónicos', unit: '%' },
+  frequency_tolerance_hz: { label: 'Tolerancia de frecuencia', unit: 'Hz' },
+  minimum_analyzed_windows: { label: 'Ventanas mínimas analizadas', digits: 0 },
+  minimum_strong_harmonics: { label: 'Armónicos destacados mínimos', digits: 0 },
+  fundamental_required: { label: 'Fundamental obligatoria' },
+  single_fundamental_contrast_threshold_db: { label: 'Contraste mínimo de una fundamental aislada', unit: 'dB' },
+  single_fundamental_persistence_threshold: { label: 'Persistencia mínima de una fundamental aislada (0–1)' },
+  global_energy_threshold_percent: { label: 'Umbral de energía grave global', unit: '%' },
+  low_activity_energy_threshold_percent: { label: 'Umbral de graves durante baja actividad', unit: '%' },
+  minimum_low_rms_dbfs: { label: 'Nivel mínimo de graves en las pausas', unit: 'dBFS' },
+  minimum_low_activity_seconds: { label: 'Baja actividad mínima', unit: 's' },
+  low_voice_probability_low_band_threshold_percent: { label: 'Graves mínimos para descartar voz', unit: '%' },
+  loudness_threshold_lufs: { label: 'Umbral de nivel percibido', unit: 'LUFS' },
+  fallback_rms_threshold_dbfs: { label: 'Umbral RMS alternativo', unit: 'dBFS' },
+  maximum_silence_percent: { label: 'Silencio máximo para evaluar', unit: '%' },
+  true_peak_threshold_dbtp: { label: 'Umbral de true peak', unit: 'dBTP' },
+  true_peak_is_estimate: { label: 'True peak estimado' },
+  minimum_speech_seconds: { label: 'Actividad de voz mínima', unit: 's' },
+  psd_similarity_threshold: { label: 'Similitud espectral mínima (0–1)' },
+  spectral_flatness_threshold: { label: 'Planitud espectral mínima (0–1)' },
+  maximum_relative_power_std: { label: 'Variación relativa de energía máxima' },
+  noise_rms_threshold_dbfs: { label: 'Umbral del nivel de ruido', unit: 'dBFS' },
+  snr_threshold_db: { label: 'SNR aproximada máxima', unit: 'dB' },
+  snr_is_estimate: { label: 'SNR estimada sin referencia limpia' },
+  speech_probability_is_heuristic: { label: 'Identificación de voz heurística' },
+  band_energy_threshold_percent: { label: 'Umbral de energía en la banda', unit: '%' },
+  minimum_voice_power_dbfs: { label: 'Nivel mínimo en la banda de voz', unit: 'dBFS' },
+  minimum_event_seconds: { label: 'Duración mínima del evento', unit: 's' },
+  maximum_event_seconds: { label: 'Duración máxima del evento', unit: 's' },
+  minimum_nyquist_hz: { label: 'Frecuencia máxima de audio mínima', unit: 'Hz' },
+  maximum_event_times: { label: 'Máximo de instantes incluidos', digits: 0 },
+  minimum_speech_windows: { label: 'Ventanas de voz mínimas', digits: 0 },
+  minimum_background_contrast_db: { label: 'Contraste mínimo frente al fondo', unit: 'dB' },
+  maximum_background_voice_band_percent: { label: 'Energía máxima de voz en el fondo', unit: '%' },
+  minimum_low_power_dbfs: { label: 'Nivel mínimo de graves', unit: 'dBFS' },
+  onset_threshold_db: { label: 'Aumento mínimo al inicio del evento', unit: 'dB' },
+  speech_neighborhood_seconds: { label: 'Distancia máxima a la voz', unit: 's' },
+  offsets: { label: 'Desplazamiento restado por canal', digits: 5 },
+  cutoff_hz: { label: 'Frecuencia de corte', unit: 'Hz', digits: 0 },
+  order: { label: 'Orden del filtro (6 dB/oct por orden)', digits: 0 },
+  fundamental_hz: { label: 'Frecuencia fundamental', unit: 'Hz' },
+  harmonics: { label: 'Líneas atenuadas', digits: 0 },
+  q: { label: 'Factor Q de la fundamental', digits: 1 },
+  attenuation_db: { label: 'Atenuación en cada línea', unit: 'dB' },
+  gain_db: { label: 'Ganancia', unit: 'dB' },
+  max_abs_dc_offset: { label: 'Desplazamiento máximo medido', digits: 5 },
+  threshold: { label: 'Umbral de corrección', digits: 4 },
+  candidate_cutoffs_hz: { label: 'Cortes evaluados', unit: 'Hz', digits: 0 },
+  rumble_reduction_db: { label: 'Reducción del ruido grave con cada corte', unit: 'dB', digits: 1 },
+  target_reduction_db: { label: 'Reducción mínima buscada', unit: 'dB' },
+  estimated_energy_removed_percent: { label: 'Energía total eliminada (estimada)', unit: '%', digits: 2 },
+  background_spectrum_window: { label: 'Ventana del espectro de fondo' },
+  strongest_line_contrast_db: { label: 'Contraste de la línea más destacada', unit: 'dB', digits: 1 },
+  target_lufs: { label: 'Nivel objetivo', unit: 'LUFS' },
+  ceiling_dbtp: { label: 'Techo de pico', unit: 'dBTP' },
+};
+
+function fieldFormat(key: string): FieldFormat {
+  if (fields[key]) return fields[key];
+  const label = key.replace(/_/g, ' ');
+  return { label: `${label[0]?.toUpperCase() ?? ''}${label.slice(1)}` };
+}
+
+type MeasurementValue = string | number | boolean | null | string[] | number[];
+
+function formatValue(value: MeasurementValue, field: FieldFormat): string {
+  if (value === null) return 'No medido';
+  if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+  if (Array.isArray(value)) return value.length ? value.map((item) => formatValue(item, field)).join(' · ') : 'Ninguno';
+  const text = typeof value === 'number' ? value.toLocaleString('es-ES', { maximumFractionDigits: field.digits ?? 3 }) : value;
+  return field.unit ? `${text} ${field.unit}` : text;
+}
+
+export function Measurements({ values }: { values: Record<string, MeasurementValue> }) {
+  return <dl className="diagnostic-measurements">{Object.entries(values).map(([key, value]) => {
+    const field = fieldFormat(key);
+    return <div key={key}><dt>{field.label}</dt><dd>{formatValue(value, field)}</dd></div>;
+  })}</dl>;
+}

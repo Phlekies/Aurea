@@ -112,12 +112,12 @@ def test_engine_has_fixed_codes_and_reproducible_explanations(tmp_path: Path) ->
     first = _diagnose(tmp_path / "voz.wav", samples)
     second = diagnose_audio(tmp_path / "voz.wav", _context(samples)).diagnostics
     assert list(first.values()) == second
-    assert DIAGNOSTICS_VERSION == "0.5.0"
+    assert DIAGNOSTICS_VERSION == "0.6.0"
     assert all(not result.detected for result in first.values())
 
 
 def test_studio_labels_every_published_evidence_and_parameter(tmp_path: Path) -> None:
-    panel = Path(__file__).parents[2] / "frontend/src/features/audio/DiagnosticsPanel.tsx"
+    panel = Path(__file__).parents[2] / "frontend/src/features/audio/Measurements.tsx"
     if not panel.exists():
         pytest.skip("frontend sources are not available")
     labels = set(re.findall(r"^\s+([a-z0-9_]+): \{ label:", panel.read_text("utf-8"), re.M))

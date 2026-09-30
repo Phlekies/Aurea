@@ -1,7 +1,7 @@
 """Speech/non-speech segmentation and background noise estimates, independent of HTTP."""
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import pairwise
 
 ACTIVITY_LABELS = ("speech", "noise", "silence")
@@ -73,6 +73,8 @@ class NoiseProfile:
     Levels are AC mean-square values in dBFS. ``relative_power_std`` is the frame
     power coefficient of variation and ``spectral_stability`` the mean cosine
     similarity of consecutive grouped PSDs, both describing temporal stability.
+    The ``low_*`` spectrum (0--300 Hz, 4 Hz bins) comes from 0.25 s windows of
+    uninterrupted background and is empty when no such window exists.
     """
 
     frame_count: int
@@ -84,10 +86,17 @@ class NoiseProfile:
     spectral_stability: float | None
     frequencies_hz: list[float]
     psd_dbfs_per_hz: list[float | None]
+    low_window_count: int = 0
+    low_frequencies_hz: list[float] = field(default_factory=list)
+    low_psd_dbfs_per_hz: list[float | None] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if (
             self.frame_count < 0
+            or self.low_window_count < 0
+            or len(self.low_frequencies_hz) != len(self.low_psd_dbfs_per_hz)
+            or (self.low_window_count == 0) != (not self.low_frequencies_hz)
+            or not _finite_or_none(*self.low_frequencies_hz, *self.low_psd_dbfs_per_hz)
             or not _finite_or_none(self.duration_seconds, self.rms_dbfs, self.floor_dbfs)
             or not _finite_or_none(self.spectral_flatness, self.relative_power_std)
             or not _finite_or_none(self.spectral_stability, *self.frequencies_hz)

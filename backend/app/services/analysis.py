@@ -302,6 +302,8 @@ class AnalysisService:
             and profile.duration_seconds <= activity.noise_seconds + tolerance
             and all(0 <= value <= nyquist + tolerance for value in profile.frequencies_hz)
             and all(right > left for left, right in pairwise(profile.frequencies_hz))
+            and all(0 <= value <= nyquist + tolerance for value in profile.low_frequencies_hz)
+            and all(right > left for left, right in pairwise(profile.low_frequencies_hz))
             and (
                 result.estimated_snr_db is None
                 or (math.isfinite(result.estimated_snr_db) and profile.frame_count > 0)

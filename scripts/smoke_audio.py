@@ -102,7 +102,7 @@ def main() -> None:
     assert analysis["duration_seconds"] == 3
     assert math.isfinite(analysis["integrated_lufs"])
     assert analysis["peak_dbfs"] < 0 and math.isfinite(analysis["true_peak_dbtp"])
-    assert analysis["diagnostics_version"] == "0.5.0"
+    assert analysis["diagnostics_version"] == "0.6.0"
     expected_codes = {
         "clipping",
         "hum",
@@ -143,7 +143,37 @@ def main() -> None:
         assert json.load(response) == analysis
     with urllib.request.urlopen(request, timeout=10) as response:
         assert json.load(response) == analysis
-    print("Audio smoke passed: ingestion, streaming, metrics, diagnostics, activity and cache")
+    with urllib.request.urlopen(endpoint + "/processing/plan", timeout=10) as response:
+        plan = json.load(response)
+    assert [step["processor"] for step in plan["steps"]] == [
+        "dc_removal",
+        "high_pass",
+        "dehum",
+        "pre_gain",
+    ]
+    assert all(step["reason"] for step in plan["steps"])
+    request = urllib.request.Request(
+        endpoint + "/process",
+        data=json.dumps({"plan": plan}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=180) as response:
+        report = json.load(response)
+    assert report["pipeline_version"] == "0.6.0" and report["plan"]["steps"] == plan["steps"]
+    assert report["duration_seconds"] == 3 and report["sample_rate"] == 44100
+    assert report["after"]["peak_dbfs"] is None or report["after"]["peak_dbfs"] <= 0
+    if args.diagnostic_demo:
+        assert "hum" in report["before"]["detected"] and "hum" not in report["after"]["detected"]
+    with urllib.request.urlopen(endpoint + "/processing", timeout=10) as response:
+        assert json.load(response) == report
+    ranged = urllib.request.Request(endpoint + "/processed/stream", headers={"Range": "bytes=0-43"})
+    with urllib.request.urlopen(ranged, timeout=10) as response:
+        assert response.status == 206 and response.read().startswith(b"RIFF")
+    print(
+        "Audio smoke passed: ingestion, streaming, metrics, diagnostics, activity, "
+        "corrections and cache"
+    )
 
 
 if __name__ == "__main__":

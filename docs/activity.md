@@ -43,8 +43,9 @@ Referencias: L. R. Rabiner y M. R. Sambur, *An algorithm for determining the end
 | `relative_power_std` | Coeficiente de variación de la potencia entre ventanas | ≥ 0 |
 | `spectral_stability` | Similitud coseno media entre PSD de grupos consecutivos de 10 ventanas | 0–1 |
 | `frequencies_hz`, `psd_dbfs_per_hz` | PSD media del fondo, resolución ≈ 33 Hz | Hz, dBFS/Hz |
+| `low_window_count`, `low_frequencies_hz`, `low_psd_dbfs_per_hz` | Desde v0.6.0: PSD 0–300 Hz con bins de 4 Hz, de ventanas Hann de 0,25 s tomadas solo de tramos de fondo ininterrumpido | ventanas, Hz, dBFS/Hz |
 
-El perfil queda vacío (estadísticas `null`, listas vacías) cuando no hay fondo seleccionable. Es determinista e independiente del tamaño de bloque de lectura; las pruebas lo comprueban.
+El espectro grave fino resuelve ruido por debajo de 100 Hz que los bins de 33 Hz mezclan por fuga espectral. Lo usa el filtro paso alto adaptativo ([procesamiento correctivo](processing.md)). Está vacío si no hay 0,25 s seguidos de fondo. El perfil queda vacío (estadísticas `null`, listas vacías) cuando no hay fondo seleccionable. Es determinista e independiente del tamaño de bloque de lectura; las pruebas lo comprueban.
 
 ## SNR aproximada
 
@@ -61,7 +62,7 @@ Las ventanas de voz del VAD son la evidencia de voz de los detectores de rumble,
 - Sin contraste de nivel (ruido continuo o un tono constante) no se detecta voz: la puerta relativa al fondo lo impide a propósito. Una grabación hablada sin pausas en al menos el 10 % del tiempo puede perder sus sílabas más débiles al principio de cada tramo.
 - Un ruido coloreado más fuerte que `activo − 14 dB` y `fondo + 6 dB` puede entrar en voz, porque la puerta espectral solo descarta ruido de tipo blanco.
 - Música, risas o respiraciones fuertes pueden etiquetarse como voz. El VAD se ha validado con señales sintéticas, no con un corpus anotado de podcasts reales; la evaluación con datos reales pertenece a la fase de benchmarks.
-- La resolución temporal es de 30 ms y la espectral del perfil ≈ 33 Hz. La PSD del fondo no separa líneas de 50/60 Hz: para eso sigue el análisis de zumbido con ventanas de 1 s.
+- La resolución temporal es de 30 ms y la espectral del perfil ≈ 33 Hz (4 Hz en el espectro grave, solo con pausas de 0,25 s o más). La PSD del fondo no separa líneas de 50/60 Hz de forma fiable: para eso sigue el análisis de zumbido con ventanas de 1 s.
 
 ## API y caché
 

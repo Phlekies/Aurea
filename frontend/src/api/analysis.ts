@@ -42,11 +42,15 @@ const noiseProfileSchema = z.object({
   spectral_stability: z.number().finite().min(0).max(1).nullable(),
   frequencies_hz: z.array(z.number().finite().nonnegative()).max(4097),
   psd_dbfs_per_hz: z.array(decibels).max(4097),
-}).refine((profile) => profile.frequencies_hz.length === profile.psd_dbfs_per_hz.length);
+  low_window_count: z.number().int().nonnegative(),
+  low_frequencies_hz: z.array(z.number().finite().nonnegative()).max(4097),
+  low_psd_dbfs_per_hz: z.array(decibels).max(4097),
+}).refine((profile) => profile.frequencies_hz.length === profile.psd_dbfs_per_hz.length
+  && profile.low_frequencies_hz.length === profile.low_psd_dbfs_per_hz.length);
 const analysisSchema = z.object({
   audio_id: z.string().regex(/^[a-f0-9]{32}$/),
   analyzer_version: z.string().min(1),
-  diagnostics_version: z.literal('0.5.0'),
+  diagnostics_version: z.literal('0.6.0'),
   diagnostics: z.array(diagnosticSchema).length(8).refine((items) => new Set(items.map((item) => item.code)).size === 8),
   sample_rate: z.number().int().positive(), channels: z.number().int().min(1).max(2),
   duration_seconds: z.number().positive(),

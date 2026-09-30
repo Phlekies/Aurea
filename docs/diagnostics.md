@@ -1,4 +1,4 @@
-# Diagnóstico explicable · v0.5.0
+# Diagnóstico explicable · v0.6.0
 
 La fase 3 interpreta las mediciones y examina la señal original decodificada. No modifica el audio. El servicio compone métricas, actividad de voz, perfil de ruido y ocho diagnósticos en el mismo informe, con persistencia atómica y conservación del original. Desde v0.5.0 los detectores usan la segmentación de voz y el fondo de la fase 4 ([actividad de voz y perfil de ruido](activity.md)).
 
@@ -36,7 +36,7 @@ Los marcos de voz provienen del VAD configurado y los de fondo son exactamente l
 
 ## Límites
 
-Los detectores de ruido, sibilancia y plosivas son heurísticos. Pueden confundir música, respiraciones, sonidos ambientales o voces con timbres poco habituales. El detector de rumble reduce falsos positivos en voz grave usando contexto temporal y espectral, pero no dispone de una referencia limpia. La SNR del informe es una aproximación sin referencia limpia, no una medida exacta, y la voz no se identifica de forma inequívoca.
+Los detectores de ruido, sibilancia y plosivas son heurísticos. Pueden confundir música, respiraciones, sonidos ambientales o voces con timbres poco habituales. El zumbido se compara con bins a 5–10 Hz de cada línea: un ruido grave tonal en esa zona (por ejemplo, 40 Hz frente a 50 Hz) puede ocultarlo. El detector de rumble reduce falsos positivos en voz grave usando contexto temporal y espectral, pero no dispone de una referencia limpia. La SNR del informe es una aproximación sin referencia limpia, no una medida exacta, y la voz no se identifica de forma inequívoca.
 
 El silencio y clips demasiado breves no generan un certificado de audio correcto. Se conservan sus métricas y se indican las comprobaciones sin datos suficientes. La confianza se reduce cuando hay poco contexto de voz/no voz o una banda no es observable.
 
@@ -44,7 +44,7 @@ La lectura utiliza bloques y conserva resúmenes temporales en lugar del audio c
 
 ## API y recuperación
 
-Se mantienen POST `/api/audio/{id}/analyze` y GET `/api/audio/{id}/analysis`. El informe incluye `diagnostics_version: "0.5.0"` y los ocho diagnósticos. Una caché sin diagnóstico, con versión antigua, códigos duplicados o scores/evidencia inválidos se considera ausente y se puede recalcular. La publicación incluye métricas y diagnóstico completos; no se guarda un informe parcial.
+Se mantienen POST `/api/audio/{id}/analyze` y GET `/api/audio/{id}/analysis`. El informe incluye `diagnostics_version: "0.6.0"` (en v0.6.0 el perfil de ruido añade su espectro grave fino; los detectores no cambian) y los ocho diagnósticos. Una caché sin diagnóstico, con versión antigua, códigos duplicados o scores/evidencia inválidos se considera ausente y se puede recalcular. La publicación incluye métricas y diagnóstico completos; no se guarda un informe parcial.
 
 Un fallo durante el diagnóstico devuelve un error de dominio seguro `analysis_failed` (503), libera la capacidad y limpia la copia temporal. El original permanece intacto. El cliente puede reintentar. Caducidad, IDs y cancelación de cliente siguen las reglas de la fase 2.
 

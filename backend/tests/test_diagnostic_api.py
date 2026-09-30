@@ -28,7 +28,7 @@ def test_complete_diagnostic_report_retains_all_metrics_and_original(
         response = client.post(f"/api/audio/{asset_id}/analyze")
         assert response.status_code == 200, response.text
         report = response.json()
-        assert report["diagnostics_version"] == "0.5.0"
+        assert report["diagnostics_version"] == "0.6.0"
         assert tuple(item["code"] for item in report["diagnostics"]) == DIAGNOSTIC_CODES
         assert report["peak_dbfs"] < 0
         for item in report["diagnostics"]:

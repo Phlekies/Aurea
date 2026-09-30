@@ -51,8 +51,8 @@ export function getAudio(id: string, signal?: AbortSignal) {
   return audioRequest(`/api/audio/${encodeURIComponent(id)}`, assetSchema, { signal });
 }
 
-export function getWaveform(id: string, signal?: AbortSignal) {
-  return audioRequest(`/api/audio/${encodeURIComponent(id)}/waveform`, waveformSchema, { signal });
+export function getWaveform(id: string, signal?: AbortSignal, resource = 'waveform') {
+  return audioRequest(`/api/audio/${encodeURIComponent(id)}/${resource}`, waveformSchema, { signal });
 }
 
 export function uploadAudio(file: File, signal?: AbortSignal) {

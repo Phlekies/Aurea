@@ -16,7 +16,7 @@ Aceptación: implementación, pruebas, documentación, ejemplo reproducible, API
 
 ## Siguiente fase
 
-Fase 5 — Procesamiento correctivo básico: eliminación de DC, high-pass adaptativo, de-hum y pre-gain como procesadores registrables, sin cambiar la frecuencia de muestreo ni generar NaN.
+Fase 6 — Reducción de ruido DSP: sustracción espectral, puerta espectral y filtro de Wiener sobre el perfil de ruido, detección de artefactos y niveles light/balanced/strong.
 
 Las fases posteriores siguen el orden del plan. No se considerará terminado un entregable sin pruebas, documentación y comprobaciones de calidad.
 
@@ -77,3 +77,11 @@ Verificación local: `npm run check` correcto; **185 pruebas backend y 61 fronte
 Documentación de métodos, unidades, referencias y límites: [activity.md](activity.md). [CI de la fase 4](https://github.com/Phlekies/Aurea/actions/runs/36756704447) correcto: `quality` y `docker` pasan, incluidos los tres smoke (normal, diagnóstico y actividad) contra los contenedores.
 
 Limitaciones: VAD heurístico validado con señales sintéticas, no con un corpus anotado. Sin contraste de nivel no detecta voz, y un ruido coloreado fuerte puede aceptarse como voz. Música o respiraciones fuertes pueden etiquetarse como voz. Los backends WebRTC/Silero quedan preparados por la interfaz pero no se incluyen, para no añadir dependencias de modelos en esta fase.
+
+## Fase 5 — Procesamiento correctivo básico completada (v0.6.0)
+
+Implementado: procesadores registrables `dc_removal`, `high_pass` (Butterworth), `dehum` (biquads de pico RBJ con profundidad exacta) y `pre_gain`, con la interfaz del plan `process(audio, params) -> AudioBuffer` y un flujo por bloques con estado equivalente. El registro instancia los procesadores por nombre, y un *runner* aplica el plan por bloques, rechaza NaN y conserva duración, canales y frecuencia de muestreo. Si el pico supera la escala completa, aplica una ganancia de seguridad sin recortar. Las reglas centralizadas en `decision_engine.py` eligen el corte mínimo razonable: el preset más bajo que reduce ≥ 10 dB el fondo de 20–80 Hz. Para ello el perfil de ruido incorpora un espectro grave de 4 Hz, que corrige un sesgo de un preset por fuga espectral. También fijan la fundamental y las líneas del de-hum, la ganancia con techo de true peak y el filtrado por confianza. API: plan recomendado, procesado con plan opcional validado (422 por paso), manifiesto, waveform y reproducción de la versión corregida. Publicación atómica y reutilización del mismo plan. El original no se modifica nunca.
+
+Interfaz: sección «Correcciones» con cada paso activable, su motivo, «¿Por qué?» con diagnóstico de origen, confianza, parámetros y evidencia, reproductor de la versión corregida y tabla antes/después. Revisada en navegador, sin desbordamiento a 390 px. La revisión detectó que bajar el nivel ocultaba la saturación al detector: ahora sigue indicada después, con un aviso, porque no se repara hasta la fase 11.
+
+Verificación local: pruebas de propiedades (forma, frecuencia de muestreo, silencio, independencia de bloques), respuestas medidas (−24,1 dB una octava bajo el corte, −30 dB en cada línea del de-hum), reglas de decisión, protección de pico, fallos seguros, contrato API y caché. Los tres smoke pasan a través del proxy, incluida la eliminación del zumbido de la demo. Renderizar 10 min estéreo a 48 kHz tarda 1,5 s (factor de tiempo real 0,0024). Métodos y límites: [processing.md](processing.md). CI de la fase 5: pendiente.

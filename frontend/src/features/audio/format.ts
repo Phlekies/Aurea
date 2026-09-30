@@ -11,5 +11,8 @@ export function formatSize(bytes: number): string {
 }
 
 export function formatNumber(value: number | null, digits = 1): string {
-  return value === null ? '—' : value.toLocaleString('es-ES', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  if (value === null) return '—';
+  // Values that round to zero are shown as 0, never as a signed "-0,0".
+  const shown = Math.abs(value) < 0.5 * 10 ** -digits ? 0 : value;
+  return shown.toLocaleString('es-ES', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }

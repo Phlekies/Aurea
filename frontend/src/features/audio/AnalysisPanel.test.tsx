@@ -1,8 +1,15 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { analysis, audioAsset, jsonResponse } from '../../test/fixtures';
+import { analysis, audioAsset, jsonResponse, processingPlan } from '../../test/fixtures';
 import { AnalysisPanel } from './AnalysisPanel';
+
+/** Corrections endpoints: recommended plan available, no previous rendering. */
+function corrections(url: string) {
+  if (url.endsWith('/processing/plan')) return jsonResponse(processingPlan);
+  if (url.endsWith('/processing')) return jsonResponse({ code: 'processing_not_found', message: 'Sin versión procesada.' }, 404);
+  return undefined;
+}
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -23,10 +30,12 @@ it('runs analysis on request and shows the metrics, timeline and both charts', a
 });
 
 it('recovers a cached report without submitting another analysis', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(analysis)));
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => Promise.resolve(corrections(url) ?? jsonResponse(analysis))));
   render(<AnalysisPanel audioId={audioAsset.id} />);
   expect(await screen.findByText('LUFS')).toBeInTheDocument();
-  expect(fetch).toHaveBeenCalledTimes(1);
+  const urls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+  expect(urls.filter((url) => url.endsWith('/analysis'))).toHaveLength(1);
+  expect(urls.filter((url) => url.endsWith('/analyze'))).toHaveLength(0);
   expect(screen.queryByRole('button', { name: 'Analizar grabación' })).not.toBeInTheDocument();
 });
 
@@ -41,6 +50,7 @@ it('allows retry after an analysis failure', async () => {
   let posts = 0;
   vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
     if (url.endsWith('/analysis')) return Promise.resolve(jsonResponse({ message: 'Sin informe.' }, 404));
+    if (corrections(url)) return Promise.resolve(corrections(url));
     posts += 1;
     return Promise.resolve(posts === 1 ? jsonResponse({ message: 'El servicio está ocupado.' }, 503) : jsonResponse(analysis));
   }));

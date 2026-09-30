@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, RootModel
 
 from app.domain.analysis import AudioAnalysis
 from app.domain.audio import AudioAsset, AudioConfig, Waveform
+from app.domain.processing import ProcessingPlan, ProcessingReport
 
 
 class ErrorResponse(BaseModel):
@@ -33,3 +34,23 @@ class AudioAnalysisResponse(RootModel[AudioAnalysis]):
     """Finite metrics, nullable logarithmic values, and explainable diagnostics."""
 
     model_config = ConfigDict(allow_inf_nan=False)
+
+
+class ProcessingPlanResponse(RootModel[ProcessingPlan]):
+    """Ordered processor decisions with parameters, reasons and evidence."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+
+class ProcessingReportResponse(RootModel[ProcessingReport]):
+    """Processing manifest: executed plan, timings, warnings and before/after metrics."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+
+class ProcessRequest(BaseModel):
+    """Optional plan to render; omitted means the recommended corrective plan."""
+
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+
+    plan: ProcessingPlan | None = None

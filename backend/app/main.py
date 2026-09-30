@@ -14,11 +14,13 @@ from fastapi.responses import JSONResponse
 from app.api.analysis import router as analysis_router
 from app.api.audio import router as audio_router
 from app.api.health import router as health_router
+from app.api.processing import router as processing_router
 from app.api.schemas import ErrorResponse
 from app.config import Settings
 from app.domain.errors import AudioError
 from app.services.analysis import AnalysisService
 from app.services.ingestion import AudioService
+from app.services.processing import ProcessingService
 from app.upload_limits import UploadLimitMiddleware
 
 
@@ -26,7 +28,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """Build an isolated application instance for servers and integration tests."""
     config = settings or Settings.from_env()
     server_handlers = logging.getLogger("uvicorn.error").handlers
-    for name in ("aurea.ingestion", "aurea.analysis"):
+    for name in ("aurea.ingestion", "aurea.analysis", "aurea.processing"):
         service_logger = logging.getLogger(name)
         service_logger.setLevel(logging.INFO)
         if server_handlers and not service_logger.handlers:
@@ -35,17 +37,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             service_logger.propagate = False
     service = AudioService(config)
     analysis_service = AnalysisService(service)
+    processing_service = ProcessingService(analysis_service)
 
     async def clean_expired() -> None:
         while True:
             await asyncio.sleep(60)
             await run_in_threadpool(service.cleanup)
             await run_in_threadpool(analysis_service.cleanup)
+            await run_in_threadpool(processing_service.cleanup)
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         await run_in_threadpool(service.cleanup)
         await run_in_threadpool(analysis_service.cleanup)
+        await run_in_threadpool(processing_service.cleanup)
         task = asyncio.create_task(clean_expired())
         try:
             yield
@@ -62,6 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.state.audio_service = service
     application.state.analysis_service = analysis_service
+    application.state.processing_service = processing_service
     application.add_middleware(UploadLimitMiddleware, max_bytes=config.max_upload_bytes + 65536)
 
     @application.exception_handler(AudioError)
@@ -84,4 +90,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(health_router)
     application.include_router(audio_router)
     application.include_router(analysis_router)
+    application.include_router(processing_router)
     return application

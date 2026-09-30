@@ -21,7 +21,7 @@ from app.domain.activity import NoiseProfile, SpeechActivity
 from app.domain.analysis import AudioAnalysis
 from app.domain.diagnostics import Diagnostic
 
-DIAGNOSTICS_VERSION = "0.5.0"
+DIAGNOSTICS_VERSION = "0.6.0"
 DETECTORS: tuple[Detector, ...] = (
     ClippingDetector(),
     HumDetector(),

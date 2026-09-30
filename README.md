@@ -2,7 +2,7 @@
 
 Restauración y mastering explicable para podcasts. El objetivo es **analizar → diagnosticar → recomendar → procesar → comparar → exportar**, conservando siempre el audio original.
 
-**Estado: fase 4 implementada (v0.5.0).** Sube WAV, FLAC, MP3, M4A u OGG, escucha la grabación y pulsa **Analizar grabación** para obtener métricas, un diagnóstico explicable y la separación entre voz y ruido de fondo. Se comprueban clipping, zumbido de 50/60 Hz, ruido grave, nivel bajo, poco headroom, ruido estacionario, sibilancia y plosivas. Cada resultado incluye mensaje, evidencia, severidad, confianza heurística y parámetros. Un VAD con histéresis dibuja la línea temporal de voz, fondo y silencio; las pausas producen un perfil de ruido (nivel, suelo, espectro y estabilidad) y una SNR aproximada. El informe completo se puede descargar en JSON. El procesamiento llegará en las fases siguientes.
+**Estado: fase 5 implementada (v0.6.0).** Sube WAV, FLAC, MP3, M4A u OGG, escucha la grabación y pulsa **Analizar grabación** para obtener métricas, un diagnóstico explicable y la separación entre voz y ruido de fondo. Se comprueban clipping, zumbido de 50/60 Hz, ruido grave, nivel bajo, poco headroom, ruido estacionario, sibilancia y plosivas. Cada resultado incluye mensaje, evidencia, severidad, confianza heurística y parámetros. Un VAD con histéresis dibuja la línea temporal de voz, fondo y silencio; las pausas producen un perfil de ruido (nivel, suelo, espectro y estabilidad) y una SNR aproximada. El informe completo se puede descargar en JSON. A partir del diagnóstico, Aurea recomienda una cadena correctiva explicable: eliminación de DC, filtro paso alto con el corte mínimo que elimina el ruido grave, eliminación de zumbido 50/60 Hz y ajuste de nivel. Puedes activar o desactivar cada paso, escuchar la versión corregida y comparar las mediciones antes y después. El original nunca se modifica. La reducción de ruido, el nivelado y el mastering llegarán en las fases siguientes.
 
 La interfaz utiliza la paleta definitiva **Claridad Acústica**: azul noche `#0B132B`, cian `#00E5FF`, turquesa `#1DE9B6`, gris azulado `#3A506B` y texto blanco `#FFFFFF`.
 
@@ -80,6 +80,8 @@ backend/app/domain/         AudioBuffer, AudioAsset y errores, independientes de
 backend/app/audio/          FFmpeg, PCM I/O, conversión y waveform
 backend/app/analysis/       Métricas, ventanas de 30 ms, VAD intercambiable y perfil de ruido
 backend/app/diagnostics/    Evidencias de señal, ocho detectores explicables y motor de diagnóstico
+backend/app/processors/     Procesadores registrables: DC, paso alto, de-hum y ganancia
+backend/app/pipeline/       Registro, reglas de decisión centralizadas y runner por bloques
 backend/app/services/       Ingesta, análisis, caché y almacenamiento temporal
 backend/app/api/            Contratos Pydantic y rutas HTTP
 backend/tests/              Pruebas unitarias y de integración con FFmpeg real
@@ -87,7 +89,7 @@ scripts/                    Calidad y ejemplo reproducible de ingesta
 docs/                       Decisiones y estado de fases
 ```
 
-La fábrica crea servicios independientes por aplicación. El dominio usa dataclasses; Pydantic valida los límites HTTP y la persistencia. Uvicorn registra acceso HTTP; ingesta y análisis registran ID y tiempo de ejecución, sin contenido de audio. El análisis trabaja por bloques sobre una copia del decodificado y guarda métricas y diagnósticos de forma atómica. Consulta [métodos del analizador](docs/analysis.md), [métodos y límites del diagnóstico](docs/diagnostics.md) y [actividad de voz y perfil de ruido](docs/activity.md).
+La fábrica crea servicios independientes por aplicación. El dominio usa dataclasses; Pydantic valida los límites HTTP y la persistencia. Uvicorn registra acceso HTTP; ingesta y análisis registran ID y tiempo de ejecución, sin contenido de audio. El análisis trabaja por bloques sobre una copia del decodificado y guarda métricas y diagnósticos de forma atómica. Consulta [métodos del analizador](docs/analysis.md), [métodos y límites del diagnóstico](docs/diagnostics.md) , [actividad de voz y perfil de ruido](docs/activity.md) y [procesamiento correctivo](docs/processing.md).
 
 FFmpeg se ejecuta sin shell, con argumentos fijos, protocolo local y formatos limitados. La ingesta conserva los bytes originales, decodifica WAV float32 `(frames, channels)` a la frecuencia nativa, genera picos por bloques y crea una copia WAV de 16 bits compatible con navegadores. La reproducción utiliza HTTP Range y picos precalculados: no decodifica todo el podcast en memoria del navegador.
 
@@ -106,7 +108,7 @@ Se admiten dos ingestas y un análisis simultáneo por proceso; exceder esa capa
 `GET /health` devuelve HTTP 200:
 
 ```json
-{"status":"ok","service":"aurea","version":"0.5.0"}
+{"status":"ok","service":"aurea","version":"0.6.0"}
 ```
 
 El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamiento ni procesamiento DSP.
@@ -120,6 +122,11 @@ El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamient
 | `GET /api/audio/{id}/stream` | WAV de reproducción; admite Range (206) |
 | `POST /api/audio/{id}/analyze` | Calcula métricas, diagnósticos, actividad de voz, perfil de ruido y SNR aproximada, o recupera la caché válida (200) |
 | `GET /api/audio/{id}/analysis` | Recupera el informe ya calculado (200; 404 si falta) |
+| `GET /api/audio/{id}/processing/plan` | Cadena correctiva recomendada con motivos y evidencia |
+| `POST /api/audio/{id}/process` | Renderiza el plan recomendado o el enviado (`{"plan": …}`); devuelve el manifiesto |
+| `GET /api/audio/{id}/processing` | Último manifiesto: pasos, tiempos, avisos y métricas antes/después |
+| `GET /api/audio/{id}/processed/waveform` | Picos de la versión corregida |
+| `GET /api/audio/{id}/processed/stream` | Versión corregida; admite Range (206) |
 
 Errores de dominio: `{ "code": "invalid_audio_file", "message": "…" }`. Estados: 413 para tamaño/duración, 415 para formato/MIME, 422 para audio no válido, 404 para ID ausente, 410 para caducado antes de limpieza y 503 para decodificador/capacidad. Los errores del parser HTTP usan el contrato `detail` de FastAPI.
 
@@ -134,13 +141,13 @@ Con ambos servidores arrancados, en Windows:
 .\.venv\Scripts\python.exe scripts/smoke_audio.py --activity-demo --write-sample data/qa/activity-demo.wav
 ```
 
-En macOS/Linux sustituye el intérprete por `.venv/bin/python`. El primer comando comprueba carga, metadatos, waveform, reproducción parcial, métricas, los ocho diagnósticos, la línea temporal de voz, el perfil de ruido y la caché a través del proxy. Los otros comandos crean clips sintéticos de 12 segundos para cargar desde la interfaz y pulsar **Analizar grabación**. La demo de diagnóstico introduce deliberadamente clipping y un tono persistente de 50 Hz; la de actividad alterna frases sintéticas y pausas sobre un siseo conocido para mostrar la línea temporal y el perfil de ruido. Ninguna contiene voz privada ni audio con licencia. Usa `--diagnostic-demo` o `--activity-demo` sin `--write-sample` para ejecutar también el smoke positivo. Los tres casos se comprueban contra Docker en CI.
+En macOS/Linux sustituye el intérprete por `.venv/bin/python`. El primer comando comprueba carga, metadatos, waveform, reproducción parcial, métricas, los ocho diagnósticos, la línea temporal de voz, el perfil de ruido, la cadena correctiva y su versión procesada, y la caché a través del proxy. Los otros comandos crean clips sintéticos de 12 segundos para cargar desde la interfaz y pulsar **Analizar grabación**. La demo de diagnóstico introduce deliberadamente clipping y un tono persistente de 50 Hz; la de actividad alterna frases sintéticas y pausas sobre un siseo conocido para mostrar la línea temporal y el perfil de ruido. Ninguna contiene voz privada ni audio con licencia. Usa `--diagnostic-demo` o `--activity-demo` sin `--write-sample` para ejecutar también el smoke positivo. Los tres casos se comprueban contra Docker en CI.
 
-Los informes anteriores a v0.5.0 se recalculan al pulsar **Analizar grabación**. Las grabaciones conservan su ID y el original; una caché antigua no se presenta como un diagnóstico actualizado.
+Los informes anteriores a v0.6.0 se recalculan al pulsar **Analizar grabación**. Las grabaciones conservan su ID y el original; una caché antigua no se presenta como un diagnóstico actualizado.
 
 ## Roadmap
 
-Consulta el [plan completo](podcast_audio_doctor_project_plan.md) y el [estado de implementación](docs/progress.md). El siguiente entregable es la fase 5: filtros correctivos (DC, high-pass adaptativo, de-hum y pre-gain).
+Consulta el [plan completo](podcast_audio_doctor_project_plan.md) y el [estado de implementación](docs/progress.md). El siguiente entregable es la fase 6: reducción de ruido DSP (sustracción espectral, puerta espectral y Wiener) con niveles light, balanced y strong.
 
 Fuentes de implementación: [Vite](https://vite.dev/guide/), [testing de FastAPI](https://fastapi.tiangolo.com/tutorial/testing/) y [Vitest](https://vitest.dev/guide/).
 Audio: [archivos en FastAPI](https://fastapi.tiangolo.com/tutorial/request-files/), [protocolos FFmpeg](https://ffmpeg.org/ffmpeg-protocols.html), [selección de pistas FFmpeg](https://ffmpeg.org/ffmpeg.html), [SoundFile](https://python-soundfile.readthedocs.io/) y [WaveSurfer](https://wavesurfer.xyz/).
