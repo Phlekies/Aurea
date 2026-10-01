@@ -15,7 +15,7 @@ const metrics = {
   ],
 };
 export const masteringReport: MasteringReport = {
-  audio_id: audioAsset.id, mastering_version: '0.9.0', source_revision: 'b'.repeat(64),
+  audio_id: audioAsset.id, mastering_version: '0.9.1', source_revision: 'b'.repeat(64),
   preset: masteringPresets[0], sample_rate: 44100, channels: 1, frames: 220500, duration_seconds: 5, bit_depth: 24,
   before: metrics, after: { ...metrics, integrated_lufs: -16, true_peak_dbtp: -1.3, momentary_max_lufs: -12, short_term_max_lufs: -15,
     points: metrics.points.map((p) => ({ ...p, momentary_lufs: p.momentary_lufs === null ? null : p.momentary_lufs + 7, short_term_lufs: p.short_term_lufs === null ? null : p.short_term_lufs + 7 })) },

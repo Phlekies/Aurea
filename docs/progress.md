@@ -16,7 +16,7 @@ Aceptación: implementación, pruebas, documentación, ejemplo reproducible, API
 
 ## Siguiente fase
 
-Fase 9 — Decision Engine: unificar las decisiones deterministas y los presets de procesamiento según el plan.
+Fase 10 — Frontend utilizable: experiencia web, comparación de resultados y exportación multiformato según el plan.
 
 Las fases posteriores siguen el orden del plan. No se considerará terminado un entregable sin pruebas, documentación y comprobaciones de calidad.
 
@@ -125,3 +125,17 @@ Interfaz: selector de objetivo, resultado identificado por su preset, reproducci
 Verificación local: `npm run check` correcto con 431 pruebas backend y 101 frontend; una prueba adicional confirma que el modo lineal conserva las diferencias de nivel (total backend: 432). Ruff/formato, ESLint, mypy estricto, TypeScript y build correctos. Los cuatro smoke HTTP pasan por el proxy, incluidos QC y descarga PCM24. Las pruebas cubren nivel de referencia, ventanas, picos entre muestras, dinámica, estéreo, 8004/44,1/48/96 kHz, presets, caché, archivo alterado, correcciones nuevas, capacidad, restauración y errores seguros. Comprobación real de 30 min a 8004 Hz: 37,8 s de procesado (factor 0,021), −16,0 LUFS, duración exacta y QC aprobado en el primer candidato. [CI de fase 8](https://github.com/Phlekies/Aurea/actions/runs/36833018348) correcta sobre `28f0401`: quality pasa en 2 min 48 s y Docker en 1 min 17 s, incluidos los cuatro smoke con masterización, QC y descarga PCM24.
 
 Limitaciones: LRA inestable antes de 60 s, ventanas incompletas sin valor, normalización dinámica puede cambiar el balance temporal y QC no repara saturación del original. Sin certificación EBU ni corpus perceptual. Exportación multiformato y jobs siguen previstos en sus fases. La guía rápida se actualiza con los módulos nuevos; métodos, configuración, contratos y límites: [mastering.md](mastering.md).
+
+## Fase 9 — Motor de decisiones completada (v1.0.0-alpha)
+
+Implementado: función pura `decide(AudioAnalysis, diagnósticos, ProcessingPreset, MasteringPreset)` que centraliza correcciones, reducción de ruido, dinámica y decisiones finales. Presets externos Natural/Balanced/Studio con configuración versionada, rangos validados y rechazo de campos desconocidos. El plan conserva parámetros, motivos, diagnóstico de origen, score y evidencia, con estados automático, recomendado, desactivado y manual. La propuesta es idéntica con los mismos datos y configuración, aunque cambie el orden de los diagnósticos. Los dos módulos de reglas anteriores quedan como fachadas compatibles.
+
+Flujo completo: `POST /auto-process` valida el plan antes de publicar y mantiene capacidad durante correcciones y masterización, evitando mezclar generaciones. Respeta ajustes manuales y rechaza objetivos/terminales alterados o versiones antiguas. La caché compara ejecución y explicación/preset; el máster mantiene QC y SHA-256 obligatorios. Un fallo final conserva el corregido y la interfaz lo recupera para escuchar y reintentar.
+
+Interfaz: selector de procesado y objetivo final, estados visibles por paso, propuesta de normalización/true peak, «Procesar y crear máster» y ejecución separada. Cambiar preset reemplaza ajustes; cambiar objetivo conserva las correcciones revisadas. Resultado identificado por su preset y versión. Se conserva Claridad Acústica. Revisada con los tres presets, generación completa, reproducción hasta el final y descarga HTTP PCM24; a 390 px no hay desbordamiento. La demo de 12 s produce −15,9 LUFS y −4,6 dBTP; el smoke reduce la diferencia entre voces de 18,6 a 11,1 dB.
+
+La auditoría sintética (6 señales × 3 presets) aprueba los 15 másteres medibles y desactiva los tres silencios. Detectó un candidato lineal de Studio que no corregía loudness al reintentar porque FFmpeg sobrescribe `offset` en ese modo. Se adapta el objetivo interno del candidato a la medida independiente y se vuelve a exigir QC; el caso pasa de −16,9 a −16,0 LUFS. Masterización pasa a v0.9.1, con regresión. Natural respeta también su límite de de-hum cuando se activa manualmente un paso inicialmente desactivado.
+
+Verificación local: `npm run check` pasa con 479 pruebas backend y 107 frontend; dos regresiones adicionales del motor pasan (total backend: **481**, total proyecto: **588**). Ruff/formato, ESLint, mypy estricto, TypeScript y build correctos. Los cuatro smoke HTTP pasan con el plan completo, revisión manual en las demos correspondientes, QC, descarga PCM24 y caché. Se prueban fronteras de confianza/severidad, baja evidencia, determinismo, datos insuficientes, objetivos, presets/configuración inválidos, aceptación manual, capacidad y recuperación de fallos. Script de auditoría incluido en lint/tipos.
+
+Limitaciones: scores heurísticos sin corpus anotado ni evaluación perceptual. Los detectores actuales de retumbo/ruido estacionario tienen score 0,70 y requieren revisión con los tres presets. Voz fiable no aumenta la confianza de un diagnóstico de headroom incierto. La normalización final cambia el nivel global, incluido el fondo, hacia el objetivo elegido; QC no garantiza reparación del daño del original. Métodos, tabla de configuración, contratos y validación: [decision-engine.md](decision-engine.md). La [guía rápida](code-guide.md) se actualiza con el motor, presets y ejecución automática. Siguiente: fase 10.

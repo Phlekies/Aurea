@@ -47,7 +47,7 @@ def test_plan_and_processing_require_an_analysis(storage: Path) -> None:
         assert client.get(f"/api/audio/{asset_id}/processed/stream").status_code == 404
 
 
-def test_recommended_rendering_removes_hum_and_dc_without_touching_the_original(
+def test_reviewed_rendering_removes_hum_and_dc_without_touching_the_original(
     storage: Path,
 ) -> None:
     wav = _episode(hum=True, dc=0.02)
@@ -56,11 +56,16 @@ def test_recommended_rendering_removes_hum_and_dc_without_touching_the_original(
         decoded = (storage / asset_id / "decoded.wav").read_bytes()
         plan = client.get(f"/api/audio/{asset_id}/processing/plan").json()
         enabled = {step["processor"] for step in plan["steps"] if step["enabled"]}
-        assert enabled == {"dc_removal", "dehum"}
-        response = client.post(f"/api/audio/{asset_id}/process")
+        assert enabled == {"dc_removal"}
+        hum = next(step for step in plan["steps"] if step["processor"] == "dehum")
+        assert hum["decision"] == "recommended"
+        hum["enabled"], hum["decision"] = True, "manual"
+        response = client.post(f"/api/audio/{asset_id}/process", json={"plan": plan})
         assert response.status_code == 200, response.text
         report = response.json()
-        assert report["pipeline_version"] == "0.9.0" and report["plan"]["steps"] == plan["steps"]
+        assert (
+            report["pipeline_version"] == "1.0.0-alpha" and report["plan"]["steps"] == plan["steps"]
+        )
         assert "hum" in report["before"]["detected"] and "hum" not in report["after"]["detected"]
         assert abs(report["after"]["dc_offset"][0]) < 1e-4 < abs(report["before"]["dc_offset"][0])
         assert report["warnings"] == [] and report["safety_gain_db"] == 0

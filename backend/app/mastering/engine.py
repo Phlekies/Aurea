@@ -85,7 +85,9 @@ def master_audio(
         )
     )
     offset = _number(first, "target_offset")
+    render_target_lufs = preset.target_lufs
     for attempt in range(1, 4):
+        target = f"I={render_target_lufs}:LRA={preset.target_lra_lu}"
         filters = (
             f"loudnorm={target}:TP={ceiling}:{measured}:offset={offset}:"
             "linear=true:print_format=json,"
@@ -125,7 +127,14 @@ def master_audio(
         if after.true_peak_dbtp is not None:
             ceiling -= max(0, after.true_peak_dbtp - preset.max_true_peak_dbtp + 0.1)
         if after.integrated_lufs is not None:
-            offset += preset.target_lufs - after.integrated_lufs
+            correction = preset.target_lufs - after.integrated_lufs
+            if mode == "linear":
+                # FFmpeg's linear initialization replaces offset with I - measured_I.
+                # Changing offset would render the same failing candidate again. Adjust
+                # the internal render target; QC still uses the requested publication target.
+                render_target_lufs = min(-5, max(-70, render_target_lufs + correction))
+            else:
+                offset += correction
         ceiling = max(-9, ceiling)
         offset = min(99, max(-99, offset))
     failed = ", ".join(check.code for check in qc.checks if not check.passed)

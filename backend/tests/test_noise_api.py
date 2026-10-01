@@ -37,12 +37,15 @@ def test_noise_selection_rendering_and_safe_cache(
         assert plan_response.status_code == 200
         plan = plan_response.json()
         noise = next(step for step in plan["steps"] if step["processor"] == "noise_reduction")
-        assert noise["enabled"] and noise["parameters"]["algorithm"] == algorithm
+        assert noise["decision"] == "recommended" and not noise["enabled"]
+        assert noise["parameters"]["algorithm"] == algorithm
         assert noise["parameters"]["strength"] == strength
+        # The DSP regression explicitly accepts the medium-confidence proposal.
+        noise["enabled"], noise["decision"] = True, "manual"
         response = client.post(f"/api/audio/{asset}/process", json={"plan": plan})
         assert response.status_code == 200, response.text
         report = response.json()
-        assert report["pipeline_version"] == "0.9.0"
+        assert report["pipeline_version"] == "1.0.0-alpha"
         assert report["artifacts"]["background_reduction_db"] > 2
         assert report["artifacts"]["speech_energy_loss_db"] < 6
         assert (storage / asset / "original.wav").read_bytes() == original

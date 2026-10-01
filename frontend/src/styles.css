@@ -534,3 +534,11 @@ main { margin-left: 238px; width: calc(100% - 238px); }
 .loudness-s { stroke: var(--secondary); }
 .legend-m, .legend-s { width: 10px; height: 3px; background: var(--primary); }
 .legend-s { background: var(--secondary); margin-left: 8px; }
+.decision-badge { display: inline-block; margin: .45rem 0; padding: .22rem .6rem; border: 1px solid #3A506B; border-radius: 999px; color: #FFFFFF; font-size: .7rem; }
+.decision-badge.automatic { color: #1DE9B6; border-color: #1DE9B660; }
+.decision-badge.recommended { color: #00E5FF; border-color: #00E5FF80; }
+.decision-badge.disabled { opacity: .65; }
+.decision-mastering { margin: 1rem 0; padding: 1rem; background: #0B132B; border: 1px solid #3A506B; border-radius: .6rem; }
+.decision-mastering strong { color: #1DE9B6; font-size: .85rem; }
+.decision-mastering p { color: #FFFFFF; font-size: .8rem; line-height: 1.6; }
+.decision-controls select { width: 100%; }

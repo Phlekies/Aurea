@@ -22,7 +22,7 @@ from app.mastering.engine import master_audio
 from app.mastering.presets import load_presets
 from app.services.processing import ProcessingNotFound, ProcessingService
 
-MASTERING_VERSION = "0.9.0"
+MASTERING_VERSION = "0.9.1"
 STAGING_ID = re.compile(r"^\.mastering-[a-f0-9]{32}$")
 logger = logging.getLogger("aurea.mastering")
 
@@ -93,6 +93,9 @@ class MasteringService:
             ) from error
 
     def master(self, asset_id: str, preset_id: str = "podcast_standard") -> MasteringReport:
+        return self._master(asset_id, preset_id, capacity_reserved=False)
+
+    def _master(self, asset_id: str, preset_id: str, *, capacity_reserved: bool) -> MasteringReport:
         self.processing_service._asset(asset_id)
         preset = self.presets.get(preset_id)
         if preset is None:
@@ -106,7 +109,7 @@ class MasteringService:
         except MasteringNotFound:
             pass
         capacity = self.processing_service.capacity
-        if not capacity.acquire(blocking=False):
+        if not capacity_reserved and not capacity.acquire(blocking=False):
             raise AudioServiceUnavailable("El procesador está ocupado. Reintenta en un momento.")
         staging = self.audio_service.root / f".mastering-{uuid4().hex}"
         started = time.perf_counter()
@@ -173,7 +176,8 @@ class MasteringService:
             finally:
                 with self._staging_lock:
                     self._active_staging.discard(staging)
-                capacity.release()
+                if not capacity_reserved:
+                    capacity.release()
 
     def _publish(self, asset_id: str, staging: Path, output: Path) -> None:
         self.processing_service._asset(asset_id)

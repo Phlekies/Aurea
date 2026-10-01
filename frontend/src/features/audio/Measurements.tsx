@@ -129,6 +129,19 @@ const fields: Record<string, FieldFormat> = {
   strongest_line_contrast_db: { label: 'Contraste de la línea más destacada', unit: 'dB', digits: 1 },
   target_lufs: { label: 'Nivel objetivo', unit: 'LUFS' },
   ceiling_dbtp: { label: 'Techo de pico', unit: 'dBTP' },
+  automatic_confidence_threshold: { label: 'Evidencia mínima para aplicar automáticamente (0–1)' },
+  recommended_confidence_threshold: { label: 'Evidencia mínima para recomendar (0–1)' },
+  minimum_severity: { label: 'Severidad mínima del preset (0–1)' },
+  max_true_peak_dbtp: { label: 'Techo final de true peak', unit: 'dBTP' },
+  target_lra_lu: { label: 'Rango de loudness objetivo', unit: 'LU' },
+  loudness_tolerance_lu: { label: 'Tolerancia de loudness', unit: 'LU' },
+  input_loudness_available: { label: 'Loudness integrado medible' },
+  output_qc_required: { label: 'Verificación final obligatoria' },
+  direct_measurement_rule: { label: 'Decisión basada en una medida directa' },
+  noise_frequencies_hz: { label: 'Frecuencias del perfil de fondo', unit: 'Hz' },
+  noise_psd_dbfs_per_hz: { label: 'Densidad espectral del fondo', unit: 'dBFS/Hz' },
+  speech_starts_seconds: { label: 'Inicio de los tramos de voz', unit: 's' },
+  speech_ends_seconds: { label: 'Final de los tramos de voz', unit: 's' },
 };
 
 function fieldFormat(key: string): FieldFormat {

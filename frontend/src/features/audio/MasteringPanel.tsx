@@ -43,10 +43,10 @@ function LoudnessChart({ report }: { report: MasteringReport }) {
   </figure>;
 }
 
-export function MasteringPanel({ audioId, correctionsBusy = false }: { audioId: string; correctionsBusy?: boolean }) {
+export function MasteringPanel({ audioId, correctionsBusy = false, initialReport, defaultPreset = 'podcast_standard' }: { audioId: string; correctionsBusy?: boolean; initialReport?: MasteringReport; defaultPreset?: string }) {
   const [presets, setPresets] = useState<MasteringPreset[]>([]);
-  const [selected, setSelected] = useState('podcast_standard');
-  const [report, setReport] = useState<MasteringReport | null>(null);
+  const [selected, setSelected] = useState(initialReport?.preset.id ?? defaultPreset);
+  const [report, setReport] = useState<MasteringReport | null>(initialReport ?? null);
   const [busy, setBusy] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');

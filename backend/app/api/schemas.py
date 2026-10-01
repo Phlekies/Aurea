@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, RootModel
 
 from app.domain.analysis import AudioAnalysis
 from app.domain.audio import AudioAsset, AudioConfig, Waveform
+from app.domain.automatic import AutomaticReport
 from app.domain.mastering import MasteringReport
 from app.domain.processing import ProcessingPlan, ProcessingReport
 
@@ -64,3 +65,14 @@ class MasteringReportResponse(RootModel[MasteringReport]):
 class MasterRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
     preset: str = "podcast_standard"
+
+
+class AutomaticRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+    plan: ProcessingPlan | None = None
+    preset: str = "balanced"
+    mastering_preset: str = "podcast_standard"
+
+
+class AutomaticReportResponse(RootModel[AutomaticReport]):
+    model_config = ConfigDict(allow_inf_nan=False)

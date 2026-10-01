@@ -3,9 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { analysis, audioAsset, jsonResponse, processingPlan } from '../../test/fixtures';
 import { AnalysisPanel } from './AnalysisPanel';
+import { processingPresets } from '../../test/processing-fixtures';
+import { masteringPresets } from '../../test/mastering-fixtures';
 
 /** Corrections endpoints: recommended plan available, no previous rendering. */
 function corrections(url: string) {
+  if (url.endsWith('/processing/presets')) return jsonResponse(processingPresets);
+  if (url.endsWith('/mastering/presets')) return jsonResponse(masteringPresets);
   if (url.endsWith('/processing/plan')) return jsonResponse(processingPlan);
   if (url.endsWith('/processing')) return jsonResponse({ code: 'processing_not_found', message: 'Sin versión procesada.' }, 404);
   return undefined;

@@ -21,8 +21,8 @@ export const qcTitles = {
   finite: 'Muestras válidas', not_silent: 'Sin silencio accidental',
 };
 const qcCode = z.enum(Object.keys(qcTitles) as [keyof typeof qcTitles, ...(keyof typeof qcTitles)[]]);
-const reportSchema = z.object({
-  audio_id: z.string().regex(/^[a-f0-9]{32}$/), mastering_version: z.literal('0.9.0'),
+export const masteringReportSchema = z.object({
+  audio_id: z.string().regex(/^[a-f0-9]{32}$/), mastering_version: z.literal('0.9.1'),
   source_revision: z.string().regex(/^[a-f0-9]{64}$/), preset: presetSchema,
   sample_rate: z.number().int().min(8000).max(96000), channels: z.number().int().min(1).max(2),
   frames: z.number().int().positive(), duration_seconds: finite.positive(), bit_depth: z.literal(24),
@@ -41,7 +41,7 @@ const reportSchema = z.object({
   && [...r.before.points, ...r.after.points].every((p) => p.time_seconds <= r.duration_seconds));
 
 export type MasteringPreset = z.infer<typeof presetSchema>;
-export type MasteringReport = z.infer<typeof reportSchema>;
+export type MasteringReport = z.infer<typeof masteringReportSchema>;
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 const path = (id: string, suffix: string) => `/api/audio/${encodeURIComponent(id)}/${suffix}`;
 
@@ -49,10 +49,10 @@ export function getMasteringPresets(signal?: AbortSignal) {
   return audioRequest('/api/audio/mastering/presets', z.array(presetSchema).min(1), { signal });
 }
 export function getMastering(id: string, signal?: AbortSignal) {
-  return audioRequest(path(id, 'mastering'), reportSchema.refine((r) => r.audio_id === id), { signal });
+  return audioRequest(path(id, 'mastering'), masteringReportSchema.refine((r) => r.audio_id === id), { signal });
 }
 export function masterAudio(id: string, preset: string, signal?: AbortSignal) {
-  return audioRequest(path(id, 'master'), reportSchema.refine((r) => r.audio_id === id), {
+  return audioRequest(path(id, 'master'), masteringReportSchema.refine((r) => r.audio_id === id), {
     method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ preset }),
   }, 1800000);
 }

@@ -3,6 +3,7 @@
 import math
 from dataclasses import dataclass, field
 from itertools import pairwise
+from typing import Literal
 
 type ParameterValue = bool | int | float | str | list[float]
 
@@ -23,6 +24,7 @@ class ProcessingStep:
     source_diagnostic: str | None = None
     confidence: float | None = None
     evidence: dict[str, ParameterValue] = field(default_factory=dict)
+    decision: Literal["automatic", "recommended", "disabled", "manual"] = "manual"
 
     def __post_init__(self) -> None:
         if (
@@ -31,6 +33,7 @@ class ProcessingStep:
             or not all(_finite(value) for value in self.parameters.values())
             or not all(_finite(value) for value in self.evidence.values())
             or (self.confidence is not None and not 0 <= self.confidence <= 1)
+            or self.decision not in ("automatic", "recommended", "disabled", "manual")
         ):
             raise ValueError("Invalid processing step")
 
@@ -42,9 +45,19 @@ class ProcessingPlan:
     preset: str
     version: str
     steps: list[ProcessingStep]
+    preset_version: str = "legacy"
+    mastering_preset: str = "podcast_standard"
+    mastering_steps: list[ProcessingStep] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        if not self.preset.strip() or not self.version.strip() or len(self.steps) > 32:
+        if (
+            not self.preset.strip()
+            or not self.version.strip()
+            or not self.preset_version.strip()
+            or not self.mastering_preset.strip()
+            or len(self.steps) > 32
+            or len(self.mastering_steps) > 2
+        ):
             raise ValueError("Invalid processing plan")
 
 

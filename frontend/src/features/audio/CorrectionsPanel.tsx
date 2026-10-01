@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Download, LoaderCircle, Wrench } from 'lucide-react';
 import { ApiError } from '../../api/client';
-import { getProcessing, getProcessingPlan, processAudio, processedStreamUrl, type ProcessingMetrics, type ProcessingPlan, type ProcessingReport, type ProcessingStep } from '../../api/processing';
+import { automaticallyProcessAudio, getProcessing, getProcessingPlan, getProcessingPresets, processAudio, processedStreamUrl, type ProcessingMetrics, type ProcessingPlan, type ProcessingPreset, type ProcessingReport, type ProcessingStep } from '../../api/processing';
+import { getMasteringPresets, type MasteringPreset, type MasteringReport } from '../../api/mastering';
 import { WavePlayer } from './AudioPlayer';
 import { formatNumber as number } from './format';
 import { diagnosticTitles, processorTitles } from './labels';
@@ -11,6 +12,7 @@ import { MasteringPanel } from './MasteringPanel';
 const scalar = (value: ProcessingStep['parameters'][string]) => typeof value === 'number' ? value : 0;
 const algorithms: Record<string, string> = { wiener: 'Filtro de Wiener', spectral_subtraction: 'Sustracción espectral', spectral_gate: 'Puerta espectral' };
 const strengths: Record<string, string> = { light: 'Suave', balanced: 'Equilibrado', strong: 'Intenso' };
+const decisions = { automatic: 'Automático', recommended: 'Recomendado · revisar', disabled: 'Desactivado', manual: 'Ajuste manual' };
 
 function summary(step: Pick<ProcessingStep, 'processor' | 'parameters'>): string {
   const p = step.parameters;
@@ -68,6 +70,7 @@ function Step({ step, onToggle, onParameter, disabled }: { step: ProcessingStep;
       <input type="checkbox" checked={step.enabled} onChange={onToggle} disabled={disabled} />
       <span><strong>{title}</strong><small>{summary(step)}</small></span>
     </label>
+    <span className={`decision-badge ${step.decision}`}>{decisions[step.decision]}</span>
     <p className="diagnostic-message">{step.reason}</p>
     {settings[step.processor] && <details className="dynamics-settings"><summary>Ajustes de {step.processor === 'speech_leveler' ? 'nivelado' : 'compresión'}</summary>
       <div className="dynamics-controls">{settings[step.processor].map((setting) => <NumericSetting key={setting.key} setting={setting}
@@ -76,6 +79,7 @@ function Step({ step, onToggle, onParameter, disabled }: { step: ProcessingStep;
     </details>}
     <details className="diagnostic-details"><summary>¿Por qué?</summary>
       {step.source_diagnostic && <p className="diagnostic-confidence">Basado en el diagnóstico «{sourceTitle(step.source_diagnostic)}»{step.confidence !== null && ` · evidencia ${number(step.confidence * 100, 0)} %`}.</p>}
+      {!step.source_diagnostic && step.confidence !== null && <p className="diagnostic-confidence">Evidencia de voz: {number(step.confidence * 100, 0)} % · estimación heurística.</p>}
       <h6>Parámetros</h6><Measurements values={Object.fromEntries(Object.entries(step.parameters).filter(([key]) => !key.startsWith('noise_') && !['speech_starts_seconds', 'speech_ends_seconds'].includes(key)).map(([key, value]) => [key, key === 'algorithm' ? algorithms[String(value)] : key === 'strength' ? strengths[String(value)] : value]))} />
       {step.processor === 'noise_reduction' && <p className="analysis-note">Se utiliza el perfil espectral del fondo de esta grabación, ajustado por los filtros anteriores.</p>}
       {step.processor === 'speech_leveler' && <p className="analysis-note">Se utilizan {Array.isArray(step.parameters.speech_starts_seconds) ? step.parameters.speech_starts_seconds.length : 0} tramos de actividad compatible con voz para orientar los cambios de volumen.</p>}
@@ -109,6 +113,7 @@ function downloadReport(report: ProcessingReport) {
 function Result({ report, revision }: { report: ProcessingReport; revision: number }) {
   const applied = report.steps.filter((step) => step.enabled).map((step) => ['noise_reduction', 'speech_leveler', 'compressor'].includes(step.processor) ? `${processorTitles[step.processor]} (${summary(step)})` : processorTitles[step.processor] ?? step.processor);
   return <div className="correction-result">
+    <p className="analysis-note">Resultado aplicado: {report.plan.preset === 'natural' ? 'Natural' : report.plan.preset === 'studio' ? 'Studio' : report.plan.preset === 'balanced' ? 'Balanced' : report.plan.preset} · configuración {report.plan.preset_version}.</p>
     <WavePlayer key={revision} id={report.audio_id} resource="processed/waveform" src={`${processedStreamUrl(report.audio_id)}?r=${revision}`}
       duration={report.duration_seconds} label="Audio corregido" title="AUDIO CORREGIDO" controlSuffix="audio corregido" />
     <p className="analysis-note">{applied.length ? `Aplicado: ${applied.join(', ')}` : 'Sin correcciones activas: copia fiel del original'} · procesado en {number(report.processing_seconds, 2)} s ({number(report.real_time_factor, 3)}× tiempo real).</p>
@@ -143,32 +148,68 @@ export function CorrectionsPanel({ audioId }: { audioId: string }) {
   const [report, setReport] = useState<ProcessingReport | null>(null);
   const [revision, setRevision] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const [presets, setPresets] = useState<ProcessingPreset[]>([]);
+  const [targets, setTargets] = useState<MasteringPreset[]>([]);
+  const [master, setMaster] = useState<MasteringReport | undefined>();
   const [error, setError] = useState('');
   const controller = useRef<AbortController | null>(null);
+  const selectionController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const request = new AbortController();
-    Promise.allSettled([getProcessingPlan(audioId, request.signal), getProcessing(audioId, request.signal)]).then(([recommended, existing]) => {
+    Promise.allSettled([getProcessingPlan(audioId, request.signal), getProcessing(audioId, request.signal), getProcessingPresets(request.signal), getMasteringPresets(request.signal)]).then(([recommended, existing, choices, goals]) => {
       if (request.signal.aborted) return;
       if (existing.status === 'fulfilled') { setReport(existing.value); setPlan(existing.value.plan); }
       else if (recommended.status === 'fulfilled') setPlan(recommended.value);
       else setError('No se pudo preparar la cadena de correcciones. Vuelve a analizar la grabación.');
+      if (choices.status === 'fulfilled') setPresets(choices.value);
+      if (goals.status === 'fulfilled') setTargets(goals.value);
+      if (choices.status === 'rejected' || goals.status === 'rejected') setError('No se pudieron cargar los presets. Recarga la grabación para elegir otro.');
       if (existing.status === 'rejected' && !(existing.reason instanceof ApiError && existing.reason.status === 404)) {
         setError('No se pudo recuperar el resultado anterior. Puedes volver a aplicar las correcciones.');
       }
     });
-    return () => { request.abort(); controller.current?.abort(); };
+    return () => { request.abort(); controller.current?.abort(); selectionController.current?.abort(); };
   }, [audioId]);
 
-  async function apply() {
+  async function choose(preset: string, target: string, keepCorrections: boolean) {
     if (!plan || busy) return;
+    selectionController.current?.abort();
+    const request = new AbortController(); selectionController.current = request;
+    setChoosing(true); setError('');
+    try {
+      const next = await getProcessingPlan(audioId, request.signal, preset, target);
+      if (!request.signal.aborted) setPlan(keepCorrections ? { ...plan, mastering_preset: next.mastering_preset, mastering_steps: next.mastering_steps } : next);
+    } catch (failure) {
+      if (!request.signal.aborted) setError(failure instanceof ApiError ? failure.message : 'No se pudo preparar el preset. Reintenta.');
+    } finally {
+      if (selectionController.current === request) { selectionController.current = null; if (!request.signal.aborted) setChoosing(false); }
+    }
+  }
+
+  async function apply(automatic = false) {
+    if (!plan || busy || choosing) return;
     const request = new AbortController(); controller.current = request;
     setBusy(true); setError('');
     try {
-      const value = await processAudio(audioId, plan, request.signal);
-      if (!request.signal.aborted) { setReport(value); setRevision((current) => current + 1); }
+      if (automatic) {
+        const value = await automaticallyProcessAudio(audioId, plan, request.signal);
+        if (!request.signal.aborted) { setReport(value.processing); setMaster(value.mastering); setRevision((current) => current + 1); }
+      } else {
+        const value = await processAudio(audioId, plan, request.signal);
+        if (!request.signal.aborted) { setReport(value); setMaster(undefined); setRevision((current) => current + 1); }
+      }
     } catch (failure) {
       if (!request.signal.aborted) setError(failure instanceof ApiError ? failure.message : 'No se pudo aplicar las correcciones. Comprueba la conexión y reintenta.');
+      if (automatic && !request.signal.aborted) {
+        // Mastering can fail after corrections have been published. Recover that stage
+        // so the user can listen and retry mastering without losing the usable result.
+        try {
+          const corrected = await getProcessing(audioId, request.signal);
+          if (!request.signal.aborted) { setReport(corrected); setMaster(undefined); setRevision((current) => current + 1); }
+        } catch { /* The original and any previous visible report remain available. */ }
+      }
     } finally {
       if (controller.current === request) { controller.current = null; if (!request.signal.aborted) setBusy(false); }
     }
@@ -178,7 +219,7 @@ export function CorrectionsPanel({ audioId }: { audioId: string }) {
   const noise = plan?.steps.find((step) => step.processor === 'noise_reduction');
   function changeNoise(key: string, value: string) {
     if (!plan) return;
-    setPlan({ ...plan, preset: key === 'strength' ? value : plan.preset, steps: plan.steps.map((step) => step.processor === 'noise_reduction' ? { ...step, parameters: { ...step.parameters, [key]: value } } : step) });
+    setPlan({ ...plan, steps: plan.steps.map((step) => step.processor === 'noise_reduction' ? { ...step, decision: 'manual', parameters: { ...step.parameters, [key]: value } } : step) });
   }
   return <section className="corrections-section" aria-labelledby="corrections-title" aria-busy={busy}>
     <div className="diagnostics-heading"><h4 id="corrections-title"><Wrench size={17} />Correcciones</h4>{plan && <span>Cadena v{plan.version}</span>}</div>
@@ -186,20 +227,27 @@ export function CorrectionsPanel({ audioId }: { audioId: string }) {
     {plan && <>
       <p className="diagnostics-summary">{active ? `${active} ${active === 1 ? 'corrección activa' : 'correcciones activas'} de ${plan.steps.length}.` : 'Ninguna corrección básica es necesaria según el diagnóstico.'}</p>
       <p className="diagnostics-explanation">Cada paso se decide a partir del diagnóstico y puedes activarlo o desactivarlo. El original nunca se modifica: se crea una versión corregida aparte.</p>
+      <div className="noise-controls decision-controls">
+        <label>Preset de procesado<select aria-label="Preset de procesado" value={plan.preset} disabled={busy || choosing || !presets.length} onChange={(event) => void choose(event.target.value, plan.mastering_preset, false)}>{presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}</select></label>
+        <label>Objetivo final<select aria-label="Objetivo final" value={plan.mastering_preset} disabled={busy || choosing || !targets.length} onChange={(event) => void choose(plan.preset, event.target.value, true)}>{targets.map((target) => <option key={target.id} value={target.id}>{target.name} · {target.target_lufs} LUFS</option>)}</select></label>
+        <p className="analysis-note">{presets.find((preset) => preset.id === plan.preset)?.description} Cambiar el preset prepara una propuesta nueva y sustituye tus ajustes. Los pasos recomendados esperan tu revisión; la evidencia es heurística.</p>
+      </div>
       {noise && <div className="noise-controls">
-        <label>Método de reducción<select aria-label="Método de reducción" value={String(noise.parameters.algorithm)} disabled={busy} onChange={(event) => changeNoise('algorithm', event.target.value)}>{Object.entries(algorithms).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label>Intensidad<select aria-label="Intensidad de reducción" value={String(noise.parameters.strength)} disabled={busy} onChange={(event) => changeNoise('strength', event.target.value)}>{Object.entries(strengths).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label>Método de reducción<select aria-label="Método de reducción" value={String(noise.parameters.algorithm)} disabled={busy || choosing} onChange={(event) => changeNoise('algorithm', event.target.value)}>{Object.entries(algorithms).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label>Intensidad<select aria-label="Intensidad de reducción" value={String(noise.parameters.strength)} disabled={busy || choosing} onChange={(event) => changeNoise('strength', event.target.value)}>{Object.entries(strengths).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <p className="analysis-note">Suave conserva más ambiente; intenso elimina más fondo y puede afectar la voz. Activa el paso para probarlo y vuelve a aplicar las correcciones al cambiar de opción.</p>
       </div>}
-      <div className="diagnostic-list">{plan.steps.map((step, index) => <Step key={step.processor} step={step} disabled={busy || (step.processor === 'noise_reduction' && step.evidence.profile_available === false)}
-        onParameter={(key, value) => setPlan({ ...plan, steps: plan.steps.map((item, position) => position === index ? { ...item, parameters: { ...item.parameters, [key]: value } } : item) })}
-        onToggle={() => setPlan({ ...plan, steps: plan.steps.map((item, position) => position === index ? { ...item, enabled: !item.enabled } : item) })} />)}</div>
+      <div className="diagnostic-list">{plan.steps.map((step, index) => <Step key={`${plan.preset}-${plan.preset_version}-${step.processor}`} step={step} disabled={busy || choosing || (step.processor === 'noise_reduction' && step.evidence.profile_available === false)}
+        onParameter={(key, value) => setPlan({ ...plan, steps: plan.steps.map((item, position) => position === index ? { ...item, decision: 'manual', parameters: { ...item.parameters, [key]: value } } : item) })}
+        onToggle={() => setPlan({ ...plan, steps: plan.steps.map((item, position) => position === index ? { ...item, decision: 'manual', enabled: !item.enabled } : item) })} />)}</div>
+      {plan.mastering_steps.length > 0 && <div className="decision-mastering" aria-label="Decisiones de masterización"><strong>Últimos pasos · máster verificado</strong>{plan.mastering_steps.map((step) => <p key={step.processor}>{step.reason}</p>)}</div>}
       <div className="correction-actions">
-        <button className="primary-button" disabled={busy} onClick={() => void apply()}>{busy ? <><LoaderCircle size={16} className="loading-spinner" />Procesando…</> : 'Aplicar correcciones'}</button>
-        {busy && <span className="analysis-note" aria-live="polite">Filtrando y midiendo el resultado. Puedes seguir escuchando.</span>}
+        <button className="primary-button" disabled={busy || choosing || plan.mastering_steps.length !== 2 || plan.mastering_steps.some((step) => !step.enabled)} onClick={() => void apply(true)}>{busy ? <><LoaderCircle size={16} className="loading-spinner" />Procesando…</> : 'Procesar y crear máster'}</button>
+        <button className="secondary-button" disabled={busy || choosing} onClick={() => void apply()}>Aplicar correcciones</button>
+        {(busy || choosing) && <span className="analysis-note" aria-live="polite">{choosing ? 'Preparando la propuesta…' : 'Procesando y comprobando el resultado. Puedes seguir escuchando.'}</span>}
       </div>
     </>}
     {error && <div role="alert" className="analysis-error">{error}</div>}
-    {report && <><Result report={report} revision={revision} /><MasteringPanel key={revision} audioId={audioId} correctionsBusy={busy} /></>}
+    {report && <><Result report={report} revision={revision} /><MasteringPanel key={revision} audioId={audioId} correctionsBusy={busy} initialReport={master} defaultPreset={report.plan.mastering_preset} /></>}
   </section>;
 }

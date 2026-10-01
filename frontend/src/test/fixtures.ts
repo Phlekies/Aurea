@@ -53,19 +53,19 @@ export function jsonResponse(data: unknown, status = 200) {
 }
 
 export const processingPlan: ProcessingPlan = {
-  preset: 'corrective', version: '0.9.0',
+  preset: 'balanced', version: '1.0.0-alpha', preset_version: '1.0.0-alpha.1', mastering_preset: 'podcast_standard', mastering_steps: [],
   steps: [
-    { processor: 'dc_removal', enabled: true, parameters: { offsets: [0.02] }, reason: 'Hay desplazamiento de continua.', source_diagnostic: null, confidence: null, evidence: { max_abs_dc_offset: 0.02, threshold: 0.001 } },
-    { processor: 'high_pass', enabled: false, parameters: { cutoff_hz: 60, order: 4 }, reason: 'No se ha detectado ruido grave.', source_diagnostic: 'rumble', confidence: 0.6, evidence: { candidate_cutoffs_hz: [60, 70, 80, 100] } },
-    { processor: 'dehum', enabled: true, parameters: { fundamental_hz: 50, harmonics: 3, q: 30, attenuation_db: 24 }, reason: 'Se detectó zumbido de 50 Hz.', source_diagnostic: 'hum', confidence: 0.82, evidence: { strongest_line_contrast_db: 18 } },
-    { processor: 'pre_gain', enabled: false, parameters: { gain_db: 0 }, reason: 'El nivel de entrada es adecuado.', source_diagnostic: null, confidence: null, evidence: {} },
+    { decision: 'automatic', processor: 'dc_removal', enabled: true, parameters: { offsets: [0.02] }, reason: 'Hay desplazamiento de continua.', source_diagnostic: null, confidence: null, evidence: { max_abs_dc_offset: 0.02, threshold: 0.001 } },
+    { decision: 'automatic', processor: 'high_pass', enabled: false, parameters: { cutoff_hz: 60, order: 4 }, reason: 'No se ha detectado ruido grave.', source_diagnostic: 'rumble', confidence: 0.6, evidence: { candidate_cutoffs_hz: [60, 70, 80, 100] } },
+    { decision: 'automatic', processor: 'dehum', enabled: true, parameters: { fundamental_hz: 50, harmonics: 3, q: 30, attenuation_db: 24 }, reason: 'Se detectó zumbido de 50 Hz.', source_diagnostic: 'hum', confidence: 0.82, evidence: { strongest_line_contrast_db: 18 } },
+    { decision: 'automatic', processor: 'pre_gain', enabled: false, parameters: { gain_db: 0 }, reason: 'El nivel de entrada es adecuado.', source_diagnostic: null, confidence: null, evidence: {} },
   ],
 };
 const metrics = { peak_dbfs: -6, rms_dbfs: -20, integrated_lufs: -18, true_peak_dbtp: -5.8, dc_offset: [0.02], subbass_percent: 12, noise_rms_dbfs: -55, estimated_snr_db: 30, detected: ['hum'] };
 export const processingReport: ProcessingReport = {
   artifacts: null,
   gain_envelopes: [],
-  audio_id: audioAsset.id, pipeline_version: '0.9.0', plan: processingPlan,
+  audio_id: audioAsset.id, pipeline_version: '1.0.0-alpha', plan: processingPlan,
   steps: processingPlan.steps.map((step) => ({ processor: step.processor, enabled: step.enabled, parameters: step.parameters, seconds: 0.012 })),
   sample_rate: 44100, channels: 1, duration_seconds: 5, safety_gain_db: 0, warnings: [],
   processing_seconds: 0.4, real_time_factor: 0.08,
@@ -76,12 +76,12 @@ export const processingReport: ProcessingReport = {
 export const dynamicsPlan: ProcessingPlan = {
   ...processingPlan,
   steps: [...processingPlan.steps, {
-    processor: 'speech_leveler', enabled: true,
+    decision: 'automatic', processor: 'speech_leveler', enabled: true,
     parameters: { target_rms_dbfs: -24, max_boost_db: 8, max_cut_db: 8, window_ms: 400, smoothing_ms: 500, speech_starts_seconds: [.5, 3.5], speech_ends_seconds: [2, 5], noise_floor_dbfs: -55 },
     reason: 'La voz cambia de nivel entre los tramos analizados.', source_diagnostic: null, confidence: null,
     evidence: { speech_available: true, speech_seconds: 3, speech_rms_dbfs: -18, speech_level_spread_db: 10 },
   }, {
-    processor: 'compressor', enabled: true,
+    decision: 'automatic', processor: 'compressor', enabled: true,
     parameters: { threshold_dbfs: -18, ratio: 2, knee_db: 6, attack_ms: 10, release_ms: 150, makeup_gain_db: 0 },
     reason: 'Suaviza las diferencias de volumen en la voz.', source_diagnostic: null, confidence: null, evidence: {},
   }],

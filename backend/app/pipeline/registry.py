@@ -39,7 +39,7 @@ class ProcessorRegistry:
 
 
 def default_registry() -> ProcessorRegistry:
-    """Corrective, spectral and voice dynamics processors in pipeline version 0.9.0."""
+    """Corrective, spectral and voice dynamics processors supported by the streaming runner."""
     registry = ProcessorRegistry()
     registry.register("dc_removal", DcRemovalProcessor)
     registry.register("high_pass", HighPassProcessor)

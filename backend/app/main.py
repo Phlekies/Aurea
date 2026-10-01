@@ -20,6 +20,7 @@ from app.api.schemas import ErrorResponse
 from app.config import Settings
 from app.domain.errors import AudioError
 from app.services.analysis import AnalysisService
+from app.services.automatic import AutomaticService
 from app.services.ingestion import AudioService
 from app.services.mastering import MasteringService
 from app.services.processing import ProcessingService
@@ -74,6 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.analysis_service = analysis_service
     application.state.processing_service = processing_service
     application.state.mastering_service = mastering_service
+    application.state.automatic_service = AutomaticService(processing_service, mastering_service)
     application.add_middleware(UploadLimitMiddleware, max_bytes=config.max_upload_bytes + 65536)
 
     @application.exception_handler(AudioError)

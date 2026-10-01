@@ -10,12 +10,18 @@ import pytest
 import soundfile as sf
 from fastapi.testclient import TestClient
 
+from app.analysis.analyzer import analyze_audio
 from app.config import Settings
+from app.diagnostics.engine import diagnose_audio
 from app.main import create_app
 from app.mastering.engine import MasteringInputError, MasteringQCFailed, master_audio
 from app.mastering.meter import inspect_pcm, measure_loudness
 from app.mastering.presets import load_presets
 from app.mastering.qc import output_qc
+from app.pipeline.decision_engine import decide
+from app.pipeline.presets import load_processing_presets
+from app.pipeline.registry import default_registry
+from app.pipeline.runner import prepare, run_plan
 from app.services.mastering import MasteringService
 
 
@@ -51,6 +57,36 @@ def test_meter_detects_intersample_peak(tmp_path: Path) -> None:
     meter = measure_loudness(path, Settings(storage_dir=tmp_path))
     assert meter.true_peak_dbtp is not None and meter.sample_peak_dbfs is not None
     assert meter.true_peak_dbtp > meter.sample_peak_dbfs + 2.5
+
+
+def test_linear_retry_corrects_a_short_clip_with_independent_loudness_bias(tmp_path: Path) -> None:
+    rate = 16000
+    time = np.arange(rate * 6) / rate
+    voice = ((time % 1) < 0.6) * sum(np.sin(2 * np.pi * 145 * h * time) / h for h in range(1, 8))
+    samples = np.where(time < 3, 0.035, 0.28) * voice + np.random.default_rng(2026).normal(
+        0, 0.0015, len(time)
+    )
+    source = tmp_path / "short-voice.wav"
+    sf.write(source, samples, rate, subtype="PCM_16")
+    settings = Settings(storage_dir=tmp_path / "assets")
+    analysis = analyze_audio(source, "a" * 32, ffmpeg=settings.ffmpeg)
+    diagnostic = diagnose_audio(source, analysis)
+    analysis = replace(
+        analysis,
+        diagnostics=diagnostic.diagnostics,
+        speech_activity=diagnostic.speech_activity,
+        noise_profile=diagnostic.noise_profile,
+    )
+    target = load_presets()["podcast_standard"]
+    plan = decide(analysis, analysis.diagnostics, load_processing_presets()["studio"], target)
+    registry = default_registry()
+    corrected = tmp_path / "corrected.wav"
+    run_plan(source, corrected, prepare(plan, registry, rate, 1), registry)
+    result = master_audio(corrected, tmp_path / "master.wav", target, settings)
+    assert result.qc.passed
+    assert result.after.integrated_lufs == pytest.approx(-16, abs=0.5)
+    assert result.after.true_peak_dbtp is not None and result.after.true_peak_dbtp <= -1
+    assert result.output.frames == rate * 6
 
 
 @pytest.mark.parametrize("rate,channels", [(8004, 1), (44100, 2), (48000, 1), (96000, 2)])
@@ -169,7 +205,7 @@ def test_mastering_api_presets_cache_playback_and_verified_download(storage: Pat
         assert response.status_code == 200, response.text
         report = response.json()
         assert report["qc"]["passed"] and all(c["passed"] for c in report["qc"]["checks"])
-        assert len(report["qc"]["checks"]) == 8 and report["mastering_version"] == "0.9.0"
+        assert len(report["qc"]["checks"]) == 8 and report["mastering_version"] == "0.9.1"
         assert client.post(f"/api/audio/{asset_id}/master").json() == report
         assert client.get(f"/api/audio/{asset_id}/mastering").json() == report
         download = client.get(f"/api/audio/{asset_id}/mastered/download")

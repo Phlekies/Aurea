@@ -2,7 +2,7 @@
 
 Restauración y mastering explicable para podcasts. El objetivo es **analizar → diagnosticar → recomendar → procesar → comparar → exportar**, conservando siempre el audio original.
 
-**Estado: fase 8 implementada (v0.9.0).** Sube WAV, FLAC, MP3, M4A u OGG, pulsa **Analizar grabación** y aplica las correcciones recomendadas: DC, paso alto, de-hum, reducción de ruido, nivelado y compresión. Después elige un objetivo en **Masterización** y pulsa **Crear máster**. Podcast Standard busca −16 LUFS y true peak ≤−1 dBTP; Broadcast R128, −23 LUFS. Puedes escuchar, comparar integrado/momentáneo/corto plazo/LRA y descargar el WAV PCM de 24 bits solo tras superar ocho controles del archivo final. Los informes JSON conservan métricas, decisiones, curvas y comprobaciones. El original siempre se conserva. Métodos, presets y límites: [mastering.md](docs/mastering.md).
+**Estado: fase 9 implementada (v1.0.0-alpha).** Sube WAV, FLAC, MP3, M4A u OGG, pulsa **Analizar grabación** y elige **Natural**, **Balanced** o **Studio**. Cada corrección muestra si es automática, recomendada para revisión o desactivada; puedes ajustar la propuesta. **Procesar y crear máster** aplica el plan y publica un WAV PCM24 tras ocho controles de calidad. Podcast Standard busca −16 LUFS y true peak ≤−1 dBTP; Broadcast R128, −23 LUFS. Escucha original, corregido y máster, y descarga los informes con decisiones, curvas y medidas. Se conserva Claridad Acústica y el original intacto. Métodos, configuración y límites: [decision-engine.md](docs/decision-engine.md) y [mastering.md](docs/mastering.md).
 
 Para orientarte por los archivos y las funciones principales, empieza por la [guía rápida del código](docs/code-guide.md).
 
@@ -111,7 +111,7 @@ Se admiten dos ingestas y un análisis simultáneo por proceso; exceder esa capa
 `GET /health` devuelve HTTP 200:
 
 ```json
-{"status":"ok","service":"aurea","version":"0.9.0"}
+{"status":"ok","service":"aurea","version":"1.0.0a0"}
 ```
 
 El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamiento ni procesamiento DSP.
@@ -125,7 +125,9 @@ El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamient
 | `GET /api/audio/{id}/stream` | WAV de reproducción; admite Range (206) |
 | `POST /api/audio/{id}/analyze` | Calcula métricas, diagnósticos, actividad de voz, perfil de ruido y SNR aproximada, o recupera la caché válida (200) |
 | `GET /api/audio/{id}/analysis` | Recupera el informe ya calculado (200; 404 si falta) |
-| `GET /api/audio/{id}/processing/plan` | Cadena correctiva recomendada con motivos y evidencia |
+| `GET /api/audio/processing/presets` | Natural, Balanced y Studio, con política externa versionada |
+| `GET /api/audio/{id}/processing/plan` | Plan completo: `preset`, `mastering_preset`, motivos, evidencia y confianza |
+| `POST /api/audio/{id}/auto-process` | Corrige y masteriza bajo una reserva de capacidad; acepta plan revisado o presets |
 | `POST /api/audio/{id}/process` | Renderiza el plan recomendado o el enviado (`{"plan": …}`); devuelve el manifiesto |
 | `GET /api/audio/{id}/processing` | Último manifiesto: pasos, tiempos, avisos, métricas antes/después y curvas de ganancia |
 | `GET /api/audio/{id}/processed/waveform` | Picos de la versión corregida |
@@ -151,15 +153,15 @@ Con ambos servidores arrancados, en Windows:
 .\.venv\Scripts\python.exe scripts/smoke_audio.py --dynamics-demo --write-sample data/qa/dynamics-demo.wav
 ```
 
-En macOS/Linux sustituye el intérprete por `.venv/bin/python`. El primer comando comprueba carga, reproducción, análisis, diagnósticos, actividad, perfil de ruido, correcciones, masterización, ocho controles QC y descarga PCM24 a través del proxy. Los demás crean clips sintéticos de 12 s para cargar en la interfaz y pulsar **Analizar grabación**: saturación y zumbido, frases con ruido o cambios de volumen. No contienen voz privada ni audio con licencia. Usa `--diagnostic-demo`, `--activity-demo` o `--dynamics-demo` sin `--write-sample` para ejecutar el smoke correspondiente. Los cuatro casos se comprueban contra Docker en CI.
+En macOS/Linux sustituye el intérprete por `.venv/bin/python`. El primer comando comprueba carga, reproducción, análisis, diagnósticos, actividad, perfil de ruido, plan determinista, correcciones y masterización en una acción, ocho controles QC y descarga PCM24 a través del proxy. Los demás crean clips sintéticos de 12 s para cargar en la interfaz y pulsar **Analizar grabación**: saturación y zumbido, frases con ruido o cambios de volumen. No contienen voz privada ni audio con licencia. Usa `--diagnostic-demo`, `--activity-demo` o `--dynamics-demo` sin `--write-sample` para ejecutar el smoke correspondiente. Los cuatro casos se comprueban contra Docker en CI.
 
 Los informes anteriores a v0.6.0 se recalculan al pulsar **Analizar grabación**. Las grabaciones conservan su ID y el original; una caché antigua no se presenta como un diagnóstico actualizado.
 
-Las correcciones de versiones anteriores se vuelven a renderizar con la cadena v0.9.0. Cambiar las correcciones invalida el máster anterior; pulsa **Crear máster** de nuevo. Corrección y masterización comparten una única capacidad de renderizado por proceso. MP3/FLAC y opciones adicionales de exportación pertenecen a la fase 10.
+Las correcciones de versiones anteriores se vuelven a renderizar con la cadena v1.0.0-alpha. Cambiar las correcciones invalida el máster anterior; pulsa **Crear máster** de nuevo. Corrección y masterización comparten una única capacidad de renderizado por proceso. MP3/FLAC y opciones adicionales de exportación pertenecen a la fase 10.
 
 ## Roadmap
 
-Consulta el [plan completo](podcast_audio_doctor_project_plan.md) y el [estado de implementación](docs/progress.md). El siguiente entregable es la fase 8: loudness, masterización y limiter.
+Consulta el [plan completo](podcast_audio_doctor_project_plan.md) y el [estado de implementación](docs/progress.md). El siguiente entregable es la fase 10: experiencia web y exportación multiformato.
 
 Fuentes de implementación: [Vite](https://vite.dev/guide/), [testing de FastAPI](https://fastapi.tiangolo.com/tutorial/testing/) y [Vitest](https://vitest.dev/guide/).
 Audio: [archivos en FastAPI](https://fastapi.tiangolo.com/tutorial/request-files/), [protocolos FFmpeg](https://ffmpeg.org/ffmpeg-protocols.html), [selección de pistas FFmpeg](https://ffmpeg.org/ffmpeg.html), [SoundFile](https://python-soundfile.readthedocs.io/) y [WaveSurfer](https://wavesurfer.xyz/).
@@ -167,3 +169,5 @@ Audio: [archivos en FastAPI](https://fastapi.tiangolo.com/tutorial/request-files
 Métodos, presets, benchmark y límites de reducción de ruido: [noise-reduction.md](docs/noise-reduction.md).
 
 Métodos, controles, curvas y límites del nivelador y compresor: [voice-leveling.md](docs/voice-leveling.md). La demo `--dynamics-demo` también ejecuta una prueba HTTP de 12 s con cambios de volumen, pausas y curvas; CI comprueba los cuatro smoke.
+
+Auditoría reproducible de decisiones sobre seis señales y tres presets: `scripts/benchmark_decisions.py --output data/qa/decisions.json`, con el Python del proyecto. Reglas, confidencias, API y límites: [decision-engine.md](docs/decision-engine.md).

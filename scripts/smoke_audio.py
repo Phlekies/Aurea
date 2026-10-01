@@ -175,15 +175,35 @@ def main() -> None:
         "compressor",
     ]
     assert all(step["reason"] for step in plan["steps"])
+    assert plan["version"] == "1.0.0-alpha" and plan["preset"] == "balanced"
+    assert len(plan["mastering_steps"]) == 2
+    # Exercise review as well as the fully automatic path: medium-confidence
+    # proposals stay off until this explicit synthetic-demo acceptance.
+    for step in plan["steps"]:
+        if step["decision"] == "recommended":
+            assert not step["enabled"]
+            if (args.activity_demo and step["processor"] == "noise_reduction") or (
+                args.diagnostic_demo and step["processor"] == "dehum"
+            ):
+                step["enabled"], step["decision"] = True, "manual"
+        if args.diagnostic_demo and step["processor"] == "dehum":
+            # This faint but persistent line is below Balanced's severity floor;
+            # explicit review may still request its removal.
+            step["enabled"], step["decision"] = True, "manual"
     request = urllib.request.Request(
-        endpoint + "/process",
+        endpoint + "/auto-process",
         data=json.dumps({"plan": plan}).encode(),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=180) as response:
-        report = json.load(response)
-    assert report["pipeline_version"] == "0.9.0" and report["plan"]["steps"] == plan["steps"]
+        automatic = json.load(response)
+    report, automatic_master = automatic["processing"], automatic["mastering"]
+    assert report["pipeline_version"] == "1.0.0-alpha"
+    assert report["plan"]["steps"] == plan["steps"]
+    assert automatic_master["qc"]["passed"]
+    with urllib.request.urlopen(request, timeout=180) as response:
+        assert json.load(response) == automatic
     assert report["duration_seconds"] == seconds and report["sample_rate"] == 44100
     assert report["after"]["peak_dbfs"] is None or report["after"]["peak_dbfs"] <= 0
     if args.activity_demo:
@@ -217,7 +237,8 @@ def main() -> None:
     request = urllib.request.Request(endpoint + "/master", data=b"", method="POST")
     with urllib.request.urlopen(request, timeout=300) as response:
         master = json.load(response)
-    assert master["mastering_version"] == "0.9.0" and master["qc"]["passed"]
+    assert master == automatic_master
+    assert master["mastering_version"] == "0.9.1" and master["qc"]["passed"]
     assert len(master["qc"]["checks"]) == 8 and all(c["passed"] for c in master["qc"]["checks"])
     assert abs(master["after"]["integrated_lufs"] + 16) <= 0.5
     assert master["after"]["true_peak_dbtp"] <= -0.98
@@ -244,7 +265,7 @@ def main() -> None:
         assert json.load(response) == master
     print(
         "Audio smoke passed: ingestion, streaming, metrics, diagnostics, activity, "
-        "corrections, verified mastering, PCM24 download and cache"
+        "reviewed decisions, automatic corrections + verified mastering, PCM24 download and cache"
     )
 
 

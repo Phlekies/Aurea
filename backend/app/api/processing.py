@@ -6,13 +6,18 @@ from fastapi import APIRouter, Body, Depends, Request
 from fastapi.responses import FileResponse
 
 from app.api.schemas import (
+    AutomaticReportResponse,
+    AutomaticRequest,
     ProcessingPlanResponse,
     ProcessingReportResponse,
     ProcessRequest,
     WaveformResponse,
 )
 from app.domain.audio import Waveform
+from app.domain.automatic import AutomaticReport
+from app.domain.presets import ProcessingPreset
 from app.domain.processing import ProcessingPlan, ProcessingReport
+from app.services.automatic import AutomaticService
 from app.services.processing import ProcessingService
 
 router = APIRouter(prefix="/api/audio", tags=["processing"])
@@ -26,15 +31,37 @@ def processing_service(request: Request) -> ProcessingService:
 Service = Annotated[ProcessingService, Depends(processing_service)]
 
 
+@router.get("/processing/presets")
+def get_presets(service: Service) -> list[ProcessingPreset]:
+    return list(service.presets.values())
+
+
+@router.post("/{asset_id}/auto-process", response_model=AutomaticReportResponse)
+def auto_process(
+    asset_id: str,
+    request: Request,
+    body: Annotated[AutomaticRequest | None, Body()] = None,
+) -> AutomaticReport:
+    service = cast(AutomaticService, request.app.state.automatic_service)
+    return service.process(
+        asset_id,
+        body.plan if body else None,
+        body.preset if body else "balanced",
+        body.mastering_preset if body else "podcast_standard",
+    )
+
+
 @router.get("/{asset_id}/processing/plan", response_model=ProcessingPlanResponse)
 def get_plan(
     asset_id: str,
     service: Service,
-    algorithm: Literal["spectral_subtraction", "spectral_gate", "wiener"] = "wiener",
-    strength: Literal["light", "balanced", "strong"] = "balanced",
+    algorithm: Literal["spectral_subtraction", "spectral_gate", "wiener"] | None = None,
+    strength: Literal["light", "balanced", "strong"] | None = None,
+    preset: str = "balanced",
+    mastering_preset: str = "podcast_standard",
 ) -> ProcessingPlan:
     """Recommend an explainable corrective chain from the stored analysis."""
-    return service.recommend(asset_id, algorithm, strength)
+    return service.recommend(asset_id, algorithm, strength, preset, mastering_preset)
 
 
 @router.post("/{asset_id}/process", response_model=ProcessingReportResponse)

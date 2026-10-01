@@ -1,6 +1,6 @@
 # Guía rápida del código de Aurea
 
-**Base: fase 8, v0.9.0.** React/TypeScript dibuja la interfaz; FastAPI recibe las peticiones; NumPy/SciPy procesan el audio y FFmpeg lo decodifica, mide y masteriza. El original se conserva y los resultados se guardan aparte.
+**Base: fase 9, v1.0.0-alpha.** React/TypeScript dibuja la interfaz; FastAPI recibe las peticiones; NumPy/SciPy procesan el audio y FFmpeg lo decodifica, mide y masteriza. El original se conserva y los resultados se guardan aparte.
 
 ## Sigue este recorrido
 
@@ -11,7 +11,9 @@ AudioWorkspace → API → AudioService.ingest
                        ↓
        analyze_audio → diagnose_audio → VAD + perfil de fondo
                        ↓
-        recommend_processing_plan → ProcessingPlan
+        decide + presets.toml → ProcessingPlan completo
+                       ↓
+       AutomaticService.process (una reserva para ambas etapas)
                        ↓
         ProcessingService.process → prepare → run_plan
                        ↓
@@ -34,7 +36,9 @@ AudioWorkspace → API → AudioService.ingest
 | Métricas y caché de análisis | [analysis/analyzer.py](../backend/app/analysis/analyzer.py): `analyze_audio()`; `services/analysis.py`: `AnalysisService.analyze()` y `get()` |
 | Diagnósticos | [diagnostics/engine.py](../backend/app/diagnostics/engine.py): `diagnose_audio()`; las ocho reglas están en `detectors.py` |
 | Voz y ruido de fondo | `analysis/frames.py`: ventanas; [vad.py](../backend/app/analysis/vad.py): `EnergyVoiceActivityDetector.detect()`; `noise.py`: `measure_noise()`, `noise_profile()`, `estimate_snr_db()` |
-| Elegir correcciones | [pipeline/decision_engine.py](../backend/app/pipeline/decision_engine.py): `recommend_corrective_plan()`; `noise_plan.py`: `recommend_processing_plan()`; `dynamics_plan.py`: `add_dynamics()` añade nivelado y compresión |
+| Elegir ajustes y objetivo final | [pipeline/decision_engine.py](../backend/app/pipeline/decision_engine.py): `decide()` centraliza correcciones, ruido, dinámica, confianza y `mastering_decisions()`; `noise_plan.py` y `dynamics_plan.py` son fachadas compatibles |
+| Configurar intensidad | `pipeline/presets.toml`: Natural/Balanced/Studio; `presets.py`: `load_processing_presets()`; `domain/presets.py`: umbrales comunes y validación |
+| Ejecutar en una acción | [services/automatic.py](../backend/app/services/automatic.py): `AutomaticService.process()` valida el plan y reserva capacidad para corregir y masterizar sin mezclar generaciones |
 | Ejecutar y guardar | [services/processing.py](../backend/app/services/processing.py): `ProcessingService.process()`; `pipeline/runner.py`: `prepare()` valida y `run_plan()` ejecuta por bloques |
 | Algoritmos DSP | `backend/app/processors/`: DC, paso alto, de-hum, ganancia, `NoiseReducer`, `SpeechLevelerProcessor` y `CompressorProcessor`; `pipeline/registry.py`: `default_registry()` los registra por nombre |
 | Ganancia aplicada | `SpeechLevelerStream.gain_envelope()` y `CompressorStream.gain_envelope()`; `runner.py` guarda ambas en `ProcessingReport.gain_envelopes`, descargables en la interfaz |
@@ -45,7 +49,7 @@ AudioWorkspace → API → AudioService.ingest
 
 ## Para cambiar algo
 
-- **Una decisión o umbral:** empieza por `pipeline/decision_engine.py`, `noise_plan.py` o `dynamics_plan.py`.
+- **Una decisión o umbral:** empieza por `pipeline/presets.toml`, los valores comunes de `domain/presets.py` y `pipeline/decision_engine.py`.
 - **Un objetivo de publicación:** edita `mastering/presets.toml`; no hace falta modificar el algoritmo.
 - **Un algoritmo:** modifica/añade un procesador con `validate()`, `open()` y `process()`, y regístralo en `registry.py`.
 - **Un campo de la API:** actualiza el modelo de `domain/`, el esquema Zod de `frontend/src/api/` y su presentación.

@@ -1,0 +1,60 @@
+# Scores are engineering heuristics, not calibrated probabilities.
+version = "1.0.0-alpha.1"
+
+[defaults.corrective]
+min_confidence = 0.55
+[defaults.dynamics]
+target_rms_dbfs = -24.0
+[defaults.gating]
+recommended_confidence = 0.55
+automatic_confidence = 0.85
+minimum_severity = 0.05
+
+[presets.natural]
+name = "Natural"
+description = "Correcciones suaves para conservar el carácter de la voz."
+noise_algorithm = "wiener"
+noise_strength = "light"
+[presets.natural.corrective]
+highpass_presets_hz = [60.0, 70.0, 80.0]
+rumble_reduction_db = 6.0
+dehum_margin_db = 3.0
+dehum_attenuation_db = [12.0, 24.0]
+[presets.natural.dynamics]
+target_rms_dbfs = -26.0
+max_boost_db = 4.0
+max_cut_db = 8.0
+smoothing_ms = 800.0
+compressor_threshold_dbfs = -16.0
+compressor_ratio = 1.6
+compressor_knee_db = 8.0
+compressor_attack_ms = 15.0
+compressor_release_ms = 200.0
+[presets.natural.gating]
+automatic_confidence = 0.90
+minimum_severity = 0.10
+
+[presets.balanced]
+name = "Balanced"
+description = "Equilibrio entre limpieza, estabilidad y naturalidad."
+noise_algorithm = "wiener"
+noise_strength = "balanced"
+
+[presets.studio]
+name = "Studio"
+description = "Más control del fondo y de la dinámica, con revisión de la evidencia."
+noise_algorithm = "wiener"
+noise_strength = "strong"
+[presets.studio.corrective]
+rumble_reduction_db = 12.0
+dehum_margin_db = 9.0
+[presets.studio.dynamics]
+target_rms_dbfs = -22.0
+smoothing_ms = 400.0
+compressor_threshold_dbfs = -20.0
+compressor_ratio = 3.0
+compressor_attack_ms = 8.0
+compressor_release_ms = 180.0
+[presets.studio.gating]
+automatic_confidence = 0.80
+minimum_severity = 0.03

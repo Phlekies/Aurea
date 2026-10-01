@@ -34,6 +34,7 @@ from app.domain.errors import (
     AudioNotFound,
     AudioServiceUnavailable,
     InvalidAudioFile,
+    InvalidProcessingPlan,
     ProcessingFailed,
 )
 from app.domain.processing import (
@@ -42,12 +43,14 @@ from app.domain.processing import (
     ProcessingPlan,
     ProcessingReport,
 )
-from app.pipeline.noise_plan import recommend_processing_plan
+from app.mastering.presets import load_presets
+from app.pipeline.decision_engine import PLAN_VERSION, decide
+from app.pipeline.presets import load_processing_presets
 from app.pipeline.registry import ProcessorRegistry, default_registry
 from app.pipeline.runner import PreparedStep, prepare, run_plan
 from app.services.analysis import AnalysisService
 
-PIPELINE_VERSION = "0.9.0"
+PIPELINE_VERSION = PLAN_VERSION
 logger = logging.getLogger("aurea.processing")
 STAGING_ID = re.compile(r"^\.processing-[a-f0-9]{32}$")
 # Damage that level or filter changes can hide from a detector but never repair.
@@ -105,12 +108,29 @@ class ProcessingService:
         self.waveform_adapter = TypeAdapter(Waveform)
         self._active_staging: set[Path] = set()
         self._staging_lock = threading.Lock()
+        self.presets = load_processing_presets()
+        self.mastering_presets = load_presets()
 
     def recommend(
-        self, asset_id: str, algorithm: str = "wiener", strength: str = "balanced"
+        self,
+        asset_id: str,
+        algorithm: str | None = None,
+        strength: str | None = None,
+        preset: str = "balanced",
+        mastering_preset: str = "podcast_standard",
     ) -> ProcessingPlan:
         """Recommended corrective plan; requires a current analysis report."""
-        return recommend_processing_plan(self.analysis_service.get(asset_id), algorithm, strength)
+        if preset not in self.presets or mastering_preset not in self.mastering_presets:
+            raise InvalidProcessingPlan("El preset de procesado o masterización no existe.")
+        analysis = self.analysis_service.get(asset_id)
+        return decide(
+            analysis,
+            analysis.diagnostics,
+            self.presets[preset],
+            self.mastering_presets[mastering_preset],
+            algorithm=algorithm,
+            strength=strength,
+        )
 
     def report(self, asset_id: str) -> ProcessingReport:
         """Published processing manifest, without starting any rendering."""
@@ -134,9 +154,15 @@ class ProcessingService:
 
     def process(self, asset_id: str, plan: ProcessingPlan | None = None) -> ProcessingReport:
         """Render ``plan`` (or the recommended plan) and publish it with its manifest."""
+        return self._process(asset_id, plan, capacity_reserved=False)
+
+    def _process(
+        self, asset_id: str, plan: ProcessingPlan | None, *, capacity_reserved: bool
+    ) -> ProcessingReport:
+        """Internal entry for the automatic transaction that already holds capacity."""
         asset = self._asset(asset_id)
         analysis = self.analysis_service.get(asset_id)
-        requested = plan or recommend_processing_plan(analysis)
+        requested = plan or self.recommend(asset_id)
         prepared = prepare(requested, self.registry, asset.sample_rate, asset.channels)
         requested = replace(
             requested,
@@ -146,9 +172,13 @@ class ProcessingService:
             ],
         )
         published = self._published(asset)
-        if published is not None and self._same_execution(published, prepared):
+        if (
+            published is not None
+            and self._same_execution(published, prepared)
+            and published.plan == requested
+        ):
             return published
-        if not self.capacity.acquire(blocking=False):
+        if not capacity_reserved and not self.capacity.acquire(blocking=False):
             raise ProcessingServiceUnavailable(
                 "El procesador está ocupado. Reintenta dentro de un momento."
             )
@@ -261,7 +291,8 @@ class ProcessingService:
             finally:
                 with self._staging_lock:
                     self._active_staging.discard(staging)
-                self.capacity.release()
+                if not capacity_reserved:
+                    self.capacity.release()
 
     def _measure(self, rendered: Path, asset: AudioAsset) -> AudioAnalysis:
         settings = self.audio_service.settings

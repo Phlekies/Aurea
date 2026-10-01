@@ -25,8 +25,8 @@ function frontend(task) {
 
 const tasks = {
   test: () => { backend('-m', 'pytest'); frontend('test'); },
-  lint: () => { backend('-m', 'ruff', 'check', '--config', 'pyproject.toml', '.', '../scripts/smoke_audio.py', '../scripts/benchmark_noise.py'); backend('-m', 'ruff', 'format', '--check', '--config', 'pyproject.toml', '.', '../scripts/smoke_audio.py', '../scripts/benchmark_noise.py'); frontend('lint'); },
-  typecheck: () => { backend('-m', 'mypy', 'app', 'tests', '../scripts/smoke_audio.py', '../scripts/benchmark_noise.py'); frontend('typecheck'); },
+  lint: () => { backend('-m', 'ruff', 'check', '--config', 'pyproject.toml', '.', '../scripts/smoke_audio.py', '../scripts/benchmark_noise.py', '../scripts/benchmark_decisions.py'); backend('-m', 'ruff', 'format', '--check', '--config', 'pyproject.toml', '.', '../scripts/smoke_audio.py', '../scripts/benchmark_noise.py', '../scripts/benchmark_decisions.py'); frontend('lint'); },
+  typecheck: () => { backend('-m', 'mypy', 'app', 'tests', '../scripts/smoke_audio.py', '../scripts/benchmark_noise.py', '../scripts/benchmark_decisions.py'); frontend('typecheck'); },
   backend: () => backend('-m', 'uvicorn', 'app.main:create_app', '--factory', '--reload', '--host', '127.0.0.1', '--port', '8000'),
   check: () => { tasks.lint(); tasks.typecheck(); tasks.test(); frontend('build'); },
 };

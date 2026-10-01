@@ -11,6 +11,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 function server(options: { existing?: boolean; process?: () => Response; plan?: ProcessingPlan } = {}) {
   const fetch = vi.fn().mockImplementation((url: string) => {
+    if (url.endsWith('/processing/presets')) return Promise.resolve(jsonResponse(['natural', 'balanced', 'studio'].map((id) => ({ id, name: id === 'natural' ? 'Natural' : id === 'studio' ? 'Studio' : 'Balanced', description: 'Propuesta de prueba.', version: '1.0.0-alpha.1' }))));
     if (url.endsWith('/mastering/presets')) return Promise.resolve(jsonResponse(masteringPresets));
     if (url.endsWith('/processing/plan')) return Promise.resolve(jsonResponse(options.plan ?? processingPlan));
     if (url.endsWith('/processing')) return Promise.resolve(options.existing ? jsonResponse(processingReport) : jsonResponse({ message: 'Sin versión procesada.' }, 404));
@@ -40,7 +41,7 @@ it('lists every recommended step with its reason, parameters and evidence', asyn
 
 it('changes noise algorithm and intensity without editing DSP parameters', async () => {
   const plan = { ...processingPlan, steps: [...processingPlan.steps, {
-    processor: 'noise_reduction', enabled: true,
+    decision: 'automatic' as const, processor: 'noise_reduction', enabled: true,
     parameters: { algorithm: 'wiener', strength: 'balanced', noise_frequencies_hz: [0, 22050], noise_psd_dbfs_per_hz: [-90, -90] },
     reason: 'Se detectó un fondo estacionario.', source_diagnostic: 'stationary_noise', confidence: .7,
     evidence: { profile_available: true },

@@ -12,8 +12,8 @@ it('shows API availability and enables upload when limits are loaded', async () 
   expect(screen.getByRole('status')).toHaveTextContent('Conectando');
   expect(await screen.findByText('Servicio conectado')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Subir una grabación/ })).toBeEnabled();
-  expect(screen.getByText('DESARROLLO · V0.9.0')).toBeInTheDocument();
-  expect(screen.getByText('Siguiente: motor de decisiones ampliado')).toBeInTheDocument();
+  expect(screen.getByText('DESARROLLO · V1.0.0-ALPHA')).toBeInTheDocument();
+  expect(screen.getByText('Siguiente: experiencia web y exportación multiformato')).toBeInTheDocument();
 });
 
 it('allows recovery after a connection failure', async () => {

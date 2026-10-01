@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { audioRequest, getWaveform, type Waveform } from './audio';
+import { masteringReportSchema } from './mastering';
 
 const value = z.union([z.boolean(), z.number().finite(), z.string(), z.array(z.number().finite())]);
 const decibels = z.number().finite().nullable();
@@ -12,9 +13,13 @@ const stepSchema = z.object({
   source_diagnostic: z.string().nullable(),
   confidence: z.number().finite().min(0).max(1).nullable(),
   evidence: z.record(z.string(), value),
+  decision: z.enum(['automatic', 'recommended', 'disabled', 'manual']).default('manual'),
 });
 const planSchema = z.object({
   preset: z.string().min(1), version: z.string().min(1), steps: z.array(stepSchema).max(32),
+  preset_version: z.string().min(1).default('legacy'),
+  mastering_preset: z.string().min(1).default('podcast_standard'),
+  mastering_steps: z.array(stepSchema).max(2).default([]),
 });
 const metricsSchema = z.object({
   peak_dbfs: decibels, rms_dbfs: decibels, integrated_lufs: decibels, true_peak_dbtp: decibels,
@@ -32,7 +37,7 @@ const gainEnvelopeSchema = z.object({
   && curve.times_seconds.every((time, index, times) => index === 0 || time > times[index - 1]));
 const reportSchema = z.object({
   audio_id: z.string().regex(/^[a-f0-9]{32}$/),
-  pipeline_version: z.literal('0.9.0'),
+  pipeline_version: z.literal('1.0.0-alpha'),
   plan: planSchema,
   steps: z.array(z.object({
     processor: z.string().min(1), enabled: z.boolean(),
@@ -68,12 +73,33 @@ export type ProcessingStep = z.infer<typeof stepSchema>;
 export type ProcessingPlan = z.infer<typeof planSchema>;
 export type ProcessingMetrics = z.infer<typeof metricsSchema>;
 export type ProcessingReport = z.infer<typeof reportSchema>;
+const presetSchema = z.object({
+  id: z.enum(['natural', 'balanced', 'studio']), name: z.string().min(1),
+  description: z.string().min(1), version: z.string().min(1),
+});
+export type ProcessingPreset = z.infer<typeof presetSchema>;
+export function getProcessingPresets(signal?: AbortSignal) {
+  return audioRequest('/api/audio/processing/presets', z.array(presetSchema).length(3), { signal });
+}
+export function automaticallyProcessAudio(id: string, plan: ProcessingPlan, signal?: AbortSignal) {
+  const schema = z.object({ processing: reportSchema, mastering: masteringReportSchema }).refine((r) =>
+    r.processing.audio_id === id && r.mastering.audio_id === id
+    && r.mastering.preset.id === r.processing.plan.mastering_preset
+    && r.mastering.sample_rate === r.processing.sample_rate && r.mastering.channels === r.processing.channels
+    && Math.abs(r.mastering.duration_seconds - r.processing.duration_seconds) <= 1 / r.processing.sample_rate);
+  return audioRequest(`/api/audio/${encodeURIComponent(id)}/auto-process`, schema, {
+    method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan }),
+  }, 1800000);
+}
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 const path = (id: string, suffix: string) => `/api/audio/${encodeURIComponent(id)}/${suffix}`;
 
-export function getProcessingPlan(id: string, signal?: AbortSignal) {
-  return audioRequest(path(id, 'processing/plan'), planSchema, { signal });
+export function getProcessingPlan(id: string, signal?: AbortSignal, preset?: string, masteringPreset?: string) {
+  const query = new URLSearchParams();
+  if (preset) query.set('preset', preset);
+  if (masteringPreset) query.set('mastering_preset', masteringPreset);
+  return audioRequest(`${path(id, 'processing/plan')}${query.size ? `?${query}` : ''}`, planSchema, { signal });
 }
 
 export function getProcessing(id: string, signal?: AbortSignal) {
