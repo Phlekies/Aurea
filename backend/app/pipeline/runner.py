@@ -4,8 +4,9 @@ The runner reads the trusted decoded float WAV in blocks, applies the enabled st
 plan order and writes float32 WAV at the same sample rate, length and channel count.
 After every processor it rejects non-finite samples. If the rendered peak exceeds full
 scale, a second pass applies one constant safety gain so the peak lands at -0.1 dBFS:
-nothing is clipped, and the gain is reported as a warning. Memory depends on the block
-size and the filter states, not on the recording length.
+nothing is clipped, and the gain is reported as a warning. Audio memory depends on the
+block size and filter states. Dynamic stages retain only 10 gain points per second
+for the report, bounded by the maximum recording duration.
 """
 
 import math
@@ -18,10 +19,12 @@ import soundfile as sf
 from scipy.signal import sosfreqz
 
 from app.domain.errors import InvalidProcessingPlan, ProcessingFailed
-from app.domain.processing import ParameterValue, ProcessingPlan
+from app.domain.processing import GainEnvelope, ParameterValue, ProcessingPlan
 from app.pipeline.registry import ProcessorRegistry
 from app.processors.base import Block, BlockProcessor, SosStream
+from app.processors.compressor import CompressorStream
 from app.processors.noise_reduction import NoiseReducer, SpectralStream
+from app.processors.speech_leveler import SpeechLevelerStream
 
 BLOCK_FRAMES = 65536
 SAFETY_CEILING_DBFS = -0.1
@@ -44,6 +47,7 @@ class RunResult:
     step_seconds: list[float]
     rendered_peak: float
     safety_gain_db: float
+    gain_envelopes: list[GainEnvelope]
 
 
 def prepare(
@@ -99,6 +103,19 @@ def run_plan(
                     elif steps[previous_index].processor == "dc_removal":
                         density[0] = -300
                 parameters["noise_psd_dbfs_per_hz"] = np.clip(density, -300, 0).tolist()
+            if step.processor == "speech_leveler":
+                # The energy guard is expressed in input dBFS. A manually enabled
+                # earlier gain must also move its floor, otherwise it could admit
+                # boosted background as voice. Filters/NR only lower the floor;
+                # retaining the original estimate is deliberately conservative.
+                floor = parameters["noise_floor_dbfs"]
+                assert isinstance(floor, int | float)
+                for previous_index, _previous in stages:
+                    if steps[previous_index].processor == "pre_gain":
+                        gain = steps[previous_index].parameters["gain_db"]
+                        assert isinstance(gain, int | float)
+                        floor += gain
+                parameters["noise_floor_dbfs"] = max(-300.0, min(0.0, floor))
             stages.append((index, processor.open(parameters, sample_rate, channels)))
         written = 0
         with sf.SoundFile(
@@ -158,4 +175,9 @@ def run_plan(
         raw.unlink()
     else:
         raw.replace(destination)
-    return RunResult(frames, seconds, peak, safety_gain_db)
+    curves = []
+    for index, stage in stages:
+        if isinstance(stage, CompressorStream | SpeechLevelerStream):
+            times, gains = stage.gain_envelope()
+            curves.append(GainEnvelope(steps[index].processor, index, times, gains))
+    return RunResult(frames, seconds, peak, safety_gain_db, curves)

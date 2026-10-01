@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { LoaderCircle, Wrench } from 'lucide-react';
+import { Download, LoaderCircle, Wrench } from 'lucide-react';
 import { ApiError } from '../../api/client';
 import { getProcessing, getProcessingPlan, processAudio, processedStreamUrl, type ProcessingMetrics, type ProcessingPlan, type ProcessingReport, type ProcessingStep } from '../../api/processing';
 import { WavePlayer } from './AudioPlayer';
@@ -11,7 +11,7 @@ const scalar = (value: ProcessingStep['parameters'][string]) => typeof value ===
 const algorithms: Record<string, string> = { wiener: 'Filtro de Wiener', spectral_subtraction: 'Sustracción espectral', spectral_gate: 'Puerta espectral' };
 const strengths: Record<string, string> = { light: 'Suave', balanced: 'Equilibrado', strong: 'Intenso' };
 
-function summary(step: ProcessingStep): string {
+function summary(step: Pick<ProcessingStep, 'processor' | 'parameters'>): string {
   const p = step.parameters;
   switch (step.processor) {
     case 'dc_removal': return `Desplazamiento ${number(Math.max(...(Array.isArray(p.offsets) ? p.offsets.map(Math.abs) : [0])), 4)}`;
@@ -19,6 +19,8 @@ function summary(step: ProcessingStep): string {
     case 'dehum': return `${number(scalar(p.fundamental_hz), 0)} Hz · ${scalar(p.harmonics)} ${scalar(p.harmonics) === 1 ? 'línea' : 'líneas'} · −${number(scalar(p.attenuation_db), 0)} dB`;
     case 'pre_gain': return `${scalar(p.gain_db) > 0 ? '+' : ''}${number(scalar(p.gain_db))} dB`;
     case 'noise_reduction': return `${algorithms[String(p.algorithm)]} · ${strengths[String(p.strength)]}`;
+    case 'speech_leveler': return `Objetivo ${number(scalar(p.target_rms_dbfs), 0)} dBFS · aumento hasta ${number(scalar(p.max_boost_db), 0)} dB`;
+    case 'compressor': return `${number(scalar(p.threshold_dbfs), 0)} dBFS · ${number(scalar(p.ratio), 1)}:1`;
     default: return '';
   }
 }
@@ -27,7 +29,38 @@ function sourceTitle(code: string): string {
   return code in diagnosticTitles ? diagnosticTitles[code as keyof typeof diagnosticTitles] : code;
 }
 
-function Step({ step, onToggle, disabled }: { step: ProcessingStep; onToggle: () => void; disabled: boolean }) {
+type Setting = { key: string; label: string; min: number; max: number; step: number };
+const settings: Record<string, Setting[]> = {
+  speech_leveler: [
+    { key: 'target_rms_dbfs', label: 'Objetivo de voz (dBFS)', min: -40, max: -12, step: 1 },
+    { key: 'max_boost_db', label: 'Aumento máximo (dB)', min: 0, max: 12, step: .5 },
+  ],
+  compressor: [
+    { key: 'threshold_dbfs', label: 'Umbral (dBFS)', min: -60, max: 0, step: 1 },
+    { key: 'ratio', label: 'Relación de compresión (:1)', min: 1, max: 20, step: .1 },
+    { key: 'knee_db', label: 'Transición suave (dB)', min: 0, max: 24, step: 1 },
+    { key: 'attack_ms', label: 'Ataque (ms)', min: .1, max: 200, step: .1 },
+    { key: 'release_ms', label: 'Recuperación (ms)', min: 10, max: 2000, step: 10 },
+    { key: 'makeup_gain_db', label: 'Compensación (dB)', min: -12, max: 12, step: .5 },
+  ],
+};
+
+function NumericSetting({ setting, value, disabled, onChange }: { setting: Setting; value: number; disabled: boolean; onChange: (value: number) => void }) {
+  const [text, setText] = useState(String(value));
+  function edit(raw: string) {
+    setText(raw);
+    const next = Number(raw);
+    if (raw !== '' && Number.isFinite(next) && next >= setting.min && next <= setting.max) onChange(next);
+  }
+  function finish() {
+    const next = text === '' || !Number.isFinite(Number(text)) ? value : Math.min(setting.max, Math.max(setting.min, Number(text)));
+    setText(String(next)); onChange(next);
+  }
+  return <label>{setting.label}<input type="number" value={text} disabled={disabled} min={setting.min} max={setting.max} step={setting.step}
+    onChange={(event) => edit(event.target.value)} onBlur={finish} /></label>;
+}
+
+function Step({ step, onToggle, onParameter, disabled }: { step: ProcessingStep; onToggle: () => void; onParameter: (key: string, value: number) => void; disabled: boolean }) {
   const title = processorTitles[step.processor] ?? step.processor;
   return <article className={`correction-step ${step.enabled ? 'on' : 'off'}`} aria-label={title}>
     <label className="correction-toggle">
@@ -35,10 +68,16 @@ function Step({ step, onToggle, disabled }: { step: ProcessingStep; onToggle: ()
       <span><strong>{title}</strong><small>{summary(step)}</small></span>
     </label>
     <p className="diagnostic-message">{step.reason}</p>
+    {settings[step.processor] && <details className="dynamics-settings"><summary>Ajustes de {step.processor === 'speech_leveler' ? 'nivelado' : 'compresión'}</summary>
+      <div className="dynamics-controls">{settings[step.processor].map((setting) => <NumericSetting key={setting.key} setting={setting}
+        value={scalar(step.parameters[setting.key])} disabled={disabled} onChange={(value) => onParameter(setting.key, value)} />)}</div>
+      <p className="analysis-note">{step.processor === 'speech_leveler' ? 'El nivelado cambia suavemente el volumen de los tramos de voz y protege las pausas.' : 'El compresor reduce los picos por encima del umbral. Una relación mayor reduce más las diferencias de volumen.'} Vuelve a aplicar las correcciones después de ajustar.</p>
+    </details>}
     <details className="diagnostic-details"><summary>¿Por qué?</summary>
       {step.source_diagnostic && <p className="diagnostic-confidence">Basado en el diagnóstico «{sourceTitle(step.source_diagnostic)}»{step.confidence !== null && ` · evidencia ${number(step.confidence * 100, 0)} %`}.</p>}
-      <h6>Parámetros</h6><Measurements values={Object.fromEntries(Object.entries(step.parameters).filter(([key]) => !key.startsWith('noise_')).map(([key, value]) => [key, key === 'algorithm' ? algorithms[String(value)] : key === 'strength' ? strengths[String(value)] : value]))} />
+      <h6>Parámetros</h6><Measurements values={Object.fromEntries(Object.entries(step.parameters).filter(([key]) => !key.startsWith('noise_') && !['speech_starts_seconds', 'speech_ends_seconds'].includes(key)).map(([key, value]) => [key, key === 'algorithm' ? algorithms[String(value)] : key === 'strength' ? strengths[String(value)] : value]))} />
       {step.processor === 'noise_reduction' && <p className="analysis-note">Se utiliza el perfil espectral del fondo de esta grabación, ajustado por los filtros anteriores.</p>}
+      {step.processor === 'speech_leveler' && <p className="analysis-note">Se utilizan {Array.isArray(step.parameters.speech_starts_seconds) ? step.parameters.speech_starts_seconds.length : 0} tramos de actividad compatible con voz para orientar los cambios de volumen.</p>}
       {Object.keys(step.evidence).length > 0 && <><h6>Evidencia</h6><Measurements values={step.evidence} /></>}
     </details>
   </article>;
@@ -59,13 +98,26 @@ function problems(metrics: ProcessingMetrics): string {
   return metrics.detected.length ? metrics.detected.map(sourceTitle).join(', ') : 'Ninguno';
 }
 
+function downloadReport(report: ProcessingReport) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url; link.download = `aurea-processing-${report.audio_id}.json`; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function Result({ report, revision }: { report: ProcessingReport; revision: number }) {
-  const applied = report.steps.filter((step) => step.enabled).map((step) => step.processor === 'noise_reduction' ? `${processorTitles[step.processor]} (${algorithms[String(step.parameters.algorithm)]} · ${strengths[String(step.parameters.strength)]})` : processorTitles[step.processor] ?? step.processor);
+  const applied = report.steps.filter((step) => step.enabled).map((step) => ['noise_reduction', 'speech_leveler', 'compressor'].includes(step.processor) ? `${processorTitles[step.processor]} (${summary(step)})` : processorTitles[step.processor] ?? step.processor);
   return <div className="correction-result">
     <WavePlayer key={revision} id={report.audio_id} resource="processed/waveform" src={`${processedStreamUrl(report.audio_id)}?r=${revision}`}
       duration={report.duration_seconds} label="Audio corregido" title="AUDIO CORREGIDO" controlSuffix="audio corregido" />
     <p className="analysis-note">{applied.length ? `Aplicado: ${applied.join(', ')}` : 'Sin correcciones activas: copia fiel del original'} · procesado en {number(report.processing_seconds, 2)} s ({number(report.real_time_factor, 3)}× tiempo real).</p>
     {report.warnings.map((warning) => <p key={warning} className="analysis-note correction-warning" role="status">{warning}</p>)}
+    {report.gain_envelopes.length > 0 && <div className="gain-summary" aria-label="Ganancia aplicada a la voz">
+      <h5>Cambios de volumen aplicados</h5>
+      {report.gain_envelopes.map((curve) => <p key={curve.step_index}>{processorTitles[curve.processor] ?? curve.processor}: de {number(Math.min(...curve.gain_db), 1)} a {number(Math.max(...curve.gain_db), 1)} dB.</p>)}
+      <p className="analysis-note">El informe conserva las curvas completas de cada ajuste. La reducción global de seguridad se registra por separado{report.safety_gain_db < 0 ? `: ${number(report.safety_gain_db, 1)} dB` : '.'}</p>
+    </div>}
+    <div className="analysis-actions"><button className="secondary-button" onClick={() => downloadReport(report)}><Download size={14} />Descargar informe de correcciones</button></div>
     {report.artifacts && <div className="noise-quality" aria-label="Comprobaciones de reducción de ruido">
       <p>Fondo reducido: {report.artifacts.background_reduction_db === null ? 'sin datos suficientes' : `${number(report.artifacts.background_reduction_db, 1)} dB`} · Pérdida de energía en regiones de voz: {report.artifacts.speech_energy_loss_db === null ? 'sin datos suficientes' : `${number(report.artifacts.speech_energy_loss_db, 1)} dB`}.</p>
       <p className="analysis-note">Ruido musical: {report.artifacts.musical_noise_score === null ? 'sin intervalos suficientes para comprobarlo' : report.artifacts.possible_musical_noise ? 'posibles indicios' : 'sin aumento significativo de picos aislados'}. Son indicadores aproximados de la cadena completa. Escucha el resultado para valorar la voz.</p>
@@ -139,6 +191,7 @@ export function CorrectionsPanel({ audioId }: { audioId: string }) {
         <p className="analysis-note">Suave conserva más ambiente; intenso elimina más fondo y puede afectar la voz. Activa el paso para probarlo y vuelve a aplicar las correcciones al cambiar de opción.</p>
       </div>}
       <div className="diagnostic-list">{plan.steps.map((step, index) => <Step key={step.processor} step={step} disabled={busy || (step.processor === 'noise_reduction' && step.evidence.profile_available === false)}
+        onParameter={(key, value) => setPlan({ ...plan, steps: plan.steps.map((item, position) => position === index ? { ...item, parameters: { ...item.parameters, [key]: value } } : item) })}
         onToggle={() => setPlan({ ...plan, steps: plan.steps.map((item, position) => position === index ? { ...item, enabled: !item.enabled } : item) })} />)}</div>
       <div className="correction-actions">
         <button className="primary-button" disabled={busy} onClick={() => void apply()}>{busy ? <><LoaderCircle size={16} className="loading-spinner" />Procesando…</> : 'Aplicar correcciones'}</button>

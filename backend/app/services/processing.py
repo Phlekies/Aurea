@@ -47,7 +47,7 @@ from app.pipeline.registry import ProcessorRegistry, default_registry
 from app.pipeline.runner import PreparedStep, prepare, run_plan
 from app.services.analysis import AnalysisService
 
-PIPELINE_VERSION = "0.7.0"
+PIPELINE_VERSION = "0.8.0"
 logger = logging.getLogger("aurea.processing")
 STAGING_ID = re.compile(r"^\.processing-[a-f0-9]{32}$")
 # Damage that level or filter changes can hide from a detector but never repair.
@@ -187,7 +187,8 @@ class ProcessingService:
                 if artifacts.significant_speech_loss:
                     warnings.append(
                         "La energía de las regiones de voz baja más de 6 dB. "
-                        "Prueba una intensidad menor y escucha la voz."
+                        "El nivelado o la compresión también pueden producir este cambio. "
+                        "Escucha la voz; si se deteriora, prueba ajustes más suaves."
                     )
                 if artifacts.excessive_reduction:
                     warnings.append(
@@ -224,6 +225,7 @@ class ProcessingService:
                 before=before,
                 after=after_metrics,
                 artifacts=artifacts,
+                gain_envelopes=result.gain_envelopes,
             )
             payload = json.dumps(asdict(report), allow_nan=False, separators=(",", ":"))
             (output / "report.json").write_text(payload, encoding="utf-8")
@@ -318,6 +320,12 @@ class ProcessingService:
                 != (report.artifacts is not None)
             )
             or not all((output / name).is_file() for name in files)
+            or {curve.step_index for curve in report.gain_envelopes}
+            != {
+                index
+                for index, step in enumerate(report.steps)
+                if step.enabled and step.processor in ("speech_leveler", "compressor")
+            }
         ):
             return None
         try:

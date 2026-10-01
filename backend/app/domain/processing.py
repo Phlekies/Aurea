@@ -2,6 +2,7 @@
 
 import math
 from dataclasses import dataclass, field
+from itertools import pairwise
 
 type ParameterValue = bool | int | float | str | list[float]
 
@@ -100,6 +101,28 @@ class ArtifactMetrics:
 
 
 @dataclass(frozen=True)
+class GainEnvelope:
+    """Applied stage gain sampled every 0.1 s plus the last sample, before safety gain."""
+
+    processor: str
+    step_index: int
+    times_seconds: list[float]
+    gain_db: list[float]
+
+    def __post_init__(self) -> None:
+        if (
+            not self.processor.strip()
+            or self.step_index < 0
+            or not 1 <= len(self.times_seconds) <= 18002
+            or len(self.times_seconds) != len(self.gain_db)
+            or any(not math.isfinite(value) for value in (*self.times_seconds, *self.gain_db))
+            or self.times_seconds[0] != 0
+            or any(left >= right for left, right in pairwise(self.times_seconds))
+        ):
+            raise ValueError("Invalid gain envelope")
+
+
+@dataclass(frozen=True)
 class ProcessingReport:
     """Manifest of one processed rendering: plan, timings, warnings and before/after."""
 
@@ -117,6 +140,7 @@ class ProcessingReport:
     before: ProcessingMetrics
     after: ProcessingMetrics
     artifacts: ArtifactMetrics | None = None
+    gain_envelopes: list[GainEnvelope] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if (
@@ -133,5 +157,13 @@ class ProcessingReport:
             or len(self.steps) != len(self.plan.steps)
             or any(not math.isfinite(step.seconds) or step.seconds < 0 for step in self.steps)
             or any(len(metrics.dc_offset) != self.channels for metrics in (self.before, self.after))
+            or len({curve.step_index for curve in self.gain_envelopes}) != len(self.gain_envelopes)
+            or any(
+                curve.times_seconds[-1] >= self.duration_seconds
+                or curve.step_index >= len(self.steps)
+                or not self.steps[curve.step_index].enabled
+                or self.steps[curve.step_index].processor != curve.processor
+                for curve in self.gain_envelopes
+            )
         ):
             raise ValueError("Invalid processing report")

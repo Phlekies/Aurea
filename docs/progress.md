@@ -16,7 +16,7 @@ Aceptación: implementación, pruebas, documentación, ejemplo reproducible, API
 
 ## Siguiente fase
 
-Fase 7 — Nivelado de voz y compresión: estabilización del nivel hablado y control de dinámica según el plan.
+Fase 8 — Loudness y masterización: objetivos de exportación y limiter según el plan.
 
 Las fases posteriores siguen el orden del plan. No se considerará terminado un entregable sin pruebas, documentación y comprobaciones de calidad.
 
@@ -97,3 +97,17 @@ Interfaz: selector de método y de intensidad, paso activable con motivo y perfi
 Verificación: 297 pruebas backend y 74 frontend, Ruff/formato, ESLint, mypy estricto, TypeScript y build. Smoke normal, diagnóstico y actividad contra el proxy local correctos; el último exige reducción de fondo. Propiedades comprobadas: identidad y cola de una muestra, 8/16/44,1/96 kHz, estéreo en oposición, independencia de bloques, preservación del original, mejora con referencia sintética, perfiles inválidos y fallos de publicación. Benchmark reproducible de 18 combinaciones sobre ruido blanco y coloreado, con reducción de fondo, error respecto a referencia y tiempo/coste local. Métodos y resultados: [noise-reduction.md](noise-reduction.md). [CI de fase 6](https://github.com/Phlekies/Aurea/actions/runs/36767347459) correcta: quality y docker pasan, incluidas las tres pruebas HTTP y la reducción de ruido de la demo.
 
 Limitaciones: perfil estacionario, VAD y artefactos heurísticos, validación sintética sin evaluación perceptual ni corpus real. Los indicadores comparan la cadena completa sobre las mismas regiones originales y pueden reflejar también la ganancia previa; no miden voz limpia. La sustitución de directorios puede interrumpir una lectura concurrente entre renombrados. Nivelado y mastering quedan para fases 7–8.
+
+## Fase 7 — Nivelado de voz y compresión completada (v0.8.0)
+
+Antes de desarrollar esta fase se creó la [guía rápida del código](code-guide.md), con el recorrido completo y la ubicación de las funciones principales. Se actualizó al terminar para incluir los dos nuevos procesadores y las curvas.
+
+Implementado: `SpeechLevelerProcessor`, con RMS causal de 300 ms, protección de energía de 10 ms, intervalos del VAD, bordes de 50 ms, objetivo −24 dBFS, refuerzo máximo 8 dB, reducción máxima 12 dB y suavizado de 600 ms; `CompressorProcessor`, con detección de pico enlazada estéreo y umbral/ratio/knee/ataque/liberación/makeup configurables. Ambos conservan el formato y el resultado entre bloques. `DYNAMICS_RULES` activa cada paso solo cuando lo justifican voz distinguible y mediciones; el aumento global automático queda desactivado, incluida una grabación solo de ruido.
+
+Informe: curvas de ganancia realmente aplicada a cada etapa, a 10 Hz más la última muestra, con índice de paso y tiempo. El vaciado espectral llega al nivelador/compresor antes de recogerlas. La ganancia global de seguridad se registra aparte. API y caché validan curvas y requieren todas las de pasos dinámicos activos. La revisión detectó que redondear el salto de 100 ms excedía el límite a 8004 Hz y 30 min; ambos flujos utilizan ahora el calendario exacto `ceil(k·fs/10)`, con 18.001 puntos en ese caso.
+
+Interfaz: pasos con motivos y evidencia, controles de nivelado y seis parámetros de compresión, resumen de ganancia e informe JSON completo descargable. Conserva Claridad Acústica. La demo de 12 s incluye voces de diferente nivel, cambios progresivos, pausas y ruido. Revisada en navegador: cambiar umbral a −20 dBFS y relación a 2,5:1 vuelve a renderizar y muestra los parámetros aplicados. Reproducción hasta el final y descarga JSON verificadas, con dos curvas de 121 puntos. Los controles caben a 390 px sin desbordamiento horizontal.
+
+Verificación local: `npm run check` correcto con 407 pruebas backend y 91 frontend, Ruff/formato, ESLint, mypy estricto, TypeScript y build. Los cuatro smoke HTTP pasan por el proxy local (normal, diagnóstico, actividad y dinámica). En el smoke de dinámica, la diferencia RMS de las frases comparadas baja de 18,6 a 14,9 dB con los ajustes predeterminados y se guardan ambas curvas. Las pruebas con frases más largas exigen una mejora superior a 6 dB. Se comprueban silencio, ruido solo aun con VAD falso, rampas, stereo, rodilla, tiempos, frecuencias impares, 30 min, curvas y salida entre bloques, ganancia previa manual, conservación del original, parámetros y caché inválidos. CI remoto pendiente de comprobar tras publicar esta fase.
+
+Limitaciones: RMS y VAD heurísticos, sin corpus real ni evaluación perceptual. Una voz muy baja respecto a otra puede quedar fuera del VAD y no recibir refuerzo. Una transición a ruido dentro de un tramo VAD prolongado puede conservar ganancia unos 40 ms; vuelve a 0 dB desde 50 ms en las pruebas. El compresor es causal, sin lookahead; se mantiene la protección de escala completa y el limiter de true peak queda para fase 8. Métodos, parámetros, ejemplo y límites: [voice-leveling.md](voice-leveling.md).

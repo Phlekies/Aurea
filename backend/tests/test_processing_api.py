@@ -60,7 +60,7 @@ def test_recommended_rendering_removes_hum_and_dc_without_touching_the_original(
         response = client.post(f"/api/audio/{asset_id}/process")
         assert response.status_code == 200, response.text
         report = response.json()
-        assert report["pipeline_version"] == "0.7.0" and report["plan"]["steps"] == plan["steps"]
+        assert report["pipeline_version"] == "0.8.0" and report["plan"]["steps"] == plan["steps"]
         assert "hum" in report["before"]["detected"] and "hum" not in report["after"]["detected"]
         assert abs(report["after"]["dc_offset"][0]) < 1e-4 < abs(report["before"]["dc_offset"][0])
         assert report["warnings"] == [] and report["safety_gain_db"] == 0
@@ -70,6 +70,8 @@ def test_recommended_rendering_removes_hum_and_dc_without_touching_the_original(
             "dehum",
             "noise_reduction",
             "pre_gain",
+            "speech_leveler",
+            "compressor",
         ]
         assert all(step["seconds"] >= 0 for step in report["steps"])
         assert 0 < report["real_time_factor"] < 5
@@ -190,8 +192,9 @@ def test_publication_failure_restores_previous_render(
         previous = client.post(f"/api/audio/{asset_id}/process").json()
         old_audio = (storage / asset_id / "processed" / "processed.wav").read_bytes()
         plan = json.loads(json.dumps(previous["plan"]))
-        plan["steps"][-1]["enabled"] = True
-        plan["steps"][-1]["parameters"] = {"gain_db": -4.0}
+        gain = next(step for step in plan["steps"] if step["processor"] == "pre_gain")
+        gain["enabled"] = True
+        gain["parameters"] = {"gain_db": -4.0}
         original_replace = Path.replace
 
         def fail_publication(path: Path, target: str | Path) -> Path:

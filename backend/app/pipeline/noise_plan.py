@@ -5,6 +5,7 @@ from dataclasses import replace
 from app.domain.analysis import AudioAnalysis
 from app.domain.processing import ProcessingPlan, ProcessingStep
 from app.pipeline.decision_engine import recommend_corrective_plan
+from app.pipeline.dynamics_plan import add_dynamics
 from app.processors.noise_reduction import ALGORITHMS, STRENGTHS
 
 
@@ -69,4 +70,6 @@ def recommend_processing_plan(
             "noise_profile_reference": "original; propagado por los filtros anteriores",
         },
     )
-    return replace(plan, preset=strength, steps=[*plan.steps[:-1], step, plan.steps[-1]])
+    return add_dynamics(
+        replace(plan, preset=strength, steps=[*plan.steps[:-1], step, plan.steps[-1]]), analysis
+    )

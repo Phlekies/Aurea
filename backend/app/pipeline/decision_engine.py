@@ -24,7 +24,7 @@ from app.domain.analysis import AudioAnalysis
 from app.domain.diagnostics import Diagnostic
 from app.domain.processing import ParameterValue, ProcessingPlan, ProcessingStep
 
-PLAN_VERSION = "0.7.0"
+PLAN_VERSION = "0.8.0"
 
 
 @dataclass(frozen=True)

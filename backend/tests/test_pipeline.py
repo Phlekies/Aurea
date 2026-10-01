@@ -20,6 +20,7 @@ from app.domain.errors import InvalidProcessingPlan, ProcessingFailed
 from app.domain.processing import ParameterValue, ProcessingPlan, ProcessingStep
 from app.pipeline import runner
 from app.pipeline.decision_engine import RULES, recommend_corrective_plan
+from app.pipeline.noise_plan import recommend_processing_plan
 from app.pipeline.registry import ProcessorRegistry, default_registry
 from app.pipeline.runner import prepare, run_plan
 from app.processors.base import BaseProcessor, Block, BlockProcessor, Parameters
@@ -53,7 +54,15 @@ def _run(tmp_path: Path, samples: NDArray[np.float64], plan: ProcessingPlan) -> 
 
 def test_registry_creates_known_processors_and_rejects_duplicates() -> None:
     registry = default_registry()
-    assert registry.names() == ("dc_removal", "high_pass", "dehum", "pre_gain", "noise_reduction")
+    assert registry.names() == (
+        "dc_removal",
+        "high_pass",
+        "dehum",
+        "pre_gain",
+        "noise_reduction",
+        "speech_leveler",
+        "compressor",
+    )
     assert registry.create("pre_gain").name == "pre_gain"
     with pytest.raises(ValueError):
         registry.create("reverb")
@@ -320,3 +329,56 @@ def test_studio_labels_every_plan_parameter_and_evidence_key() -> None:
         key for plan in plans for step in plan.steps for key in (*step.parameters, *step.evidence)
     }
     assert published <= labels, f"Missing studio labels: {sorted(published - labels)}"
+
+
+def test_spectral_tail_reaches_dynamics_and_curves_independent_of_blocks(tmp_path: Path) -> None:
+    samples = np.random.default_rng(12).normal(0, 0.001, (RATE * 3 + 57, 2))
+    time = np.arange(len(samples)) / RATE
+    voice = 0.1 * np.sin(2 * np.pi * 150 * time)
+    samples += voice[:, None]
+    registry = default_registry()
+    plan = _plan(
+        _step(
+            "noise_reduction",
+            noise_frequencies_hz=[0.0, RATE / 2],
+            noise_psd_dbfs_per_hz=[-99.0, -99.0],
+        ),
+        _step("speech_leveler", speech_starts_seconds=[0.0], speech_ends_seconds=[4.0]),
+        _step("compressor"),
+    )
+    source = _write(tmp_path / "input.wav", samples)
+    steps = prepare(plan, registry, RATE, 2)
+    outputs, histories = [], []
+    for size in (117, 65536):
+        target = tmp_path / f"render-{size}.wav"
+        result = run_plan(source, target, steps, registry, size)
+        outputs.append(sf.read(target, always_2d=True)[0])
+        histories.append(result.gain_envelopes)
+        assert all(curve.times_seconds[-1] == (len(samples) - 1) / RATE for curve in histories[-1])
+    np.testing.assert_allclose(outputs[0], outputs[1], atol=1e-7)
+    for first, second in zip(*histories, strict=True):
+        assert first.times_seconds == second.times_seconds
+        np.testing.assert_allclose(first.gain_db, second.gain_db, atol=1e-9)
+
+
+def test_manual_pre_gain_moves_leveler_noise_guard(tmp_path: Path) -> None:
+    samples = np.random.default_rng(9).normal(0, 0.003, RATE * 2)
+    plan = _plan(
+        _step("pre_gain", gain_db=20.0),
+        _step(
+            "speech_leveler",
+            speech_starts_seconds=[0.0],
+            speech_ends_seconds=[2.0],
+            noise_floor_dbfs=20 * math.log10(0.003),
+            target_rms_dbfs=-12.0,
+        ),
+    )
+    rendered = _run(tmp_path, samples, plan)
+    np.testing.assert_allclose(rendered[:, 0], samples * 10, atol=2e-8)
+
+
+def test_missing_voice_has_explainable_inactive_dynamics() -> None:
+    plan = recommend_processing_plan(_analysis())
+    for step in plan.steps[-2:]:
+        assert not step.enabled and step.evidence["speech_available"] is False
+        assert step.reason

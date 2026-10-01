@@ -32,7 +32,7 @@ def sample_audio(seconds: int = 3, demo: str | None = None) -> bytes:
                 )
                 signal = voice * syllable + 0.08 * math.sin(2 * math.pi * 50 * t)
                 value = round(32767 * max(-1, min(1, signal)))
-            elif demo == "activity":
+            elif demo in ("activity", "dynamics"):
                 # Syllable-like phrases (0.6 s of every second) over a steady hiss.
                 position = t % 1.0
                 phrase = math.sin(math.pi * position / 0.6) ** 0.6 if position < 0.6 else 0.0
@@ -41,7 +41,14 @@ def sample_audio(seconds: int = 3, demo: str | None = None) -> bytes:
                     math.sin(2 * math.pi * pitch * harmonic * t) / harmonic
                     for harmonic in range(1, 9)
                 )
-                signal = 0.12 * phrase * voice + background.gauss(0.0, 0.006)
+                gain = (
+                    (0.035 if t < 4 else 0.28 if t < 8 else 0.06 + 0.22 * (t - 8) / 4)
+                    if demo == "dynamics"
+                    else 0.12
+                )
+                signal = gain * phrase * voice + background.gauss(
+                    0.0, 0.0015 if demo == "dynamics" else 0.006
+                )
                 value = round(32767 * max(-1, min(1, signal)))
             else:
                 value = int(9000 * envelope * math.sin(2 * math.pi * (220 + 40 * math.sin(t)) * t))
@@ -58,9 +65,19 @@ def main() -> None:
     demos = parser.add_mutually_exclusive_group()
     demos.add_argument("--diagnostic-demo", action="store_true")
     demos.add_argument("--activity-demo", action="store_true")
+    demos.add_argument("--dynamics-demo", action="store_true")
     args = parser.parse_args()
-    demo = "diagnostic" if args.diagnostic_demo else "activity" if args.activity_demo else None
-    sample = sample_audio(12 if args.write_sample else 3, demo)
+    demo = (
+        "diagnostic"
+        if args.diagnostic_demo
+        else "activity"
+        if args.activity_demo
+        else "dynamics"
+        if args.dynamics_demo
+        else None
+    )
+    seconds = 12 if args.write_sample or args.dynamics_demo else 3
+    sample = sample_audio(seconds, demo)
     if args.write_sample:
         args.write_sample.parent.mkdir(parents=True, exist_ok=True)
         args.write_sample.write_bytes(sample)
@@ -84,7 +101,7 @@ def main() -> None:
         assert response.status == 201
         asset = json.load(response)
     assert asset["sample_rate"] == 44100 and asset["channels"] == 1
-    assert asset["frames"] == 3 * 44100
+    assert asset["frames"] == seconds * 44100
     endpoint = f"{args.base_url}/api/audio/{asset['id']}"
     with urllib.request.urlopen(endpoint, timeout=10) as response:
         assert json.load(response) == asset
@@ -99,7 +116,7 @@ def main() -> None:
         assert response.status == 200
         analysis = json.load(response)
     assert analysis["audio_id"] == asset["id"]
-    assert analysis["duration_seconds"] == 3
+    assert analysis["duration_seconds"] == seconds
     assert math.isfinite(analysis["integrated_lufs"])
     assert analysis["peak_dbfs"] < 0 and math.isfinite(analysis["true_peak_dbtp"])
     assert analysis["diagnostics_version"] == "0.6.0"
@@ -126,7 +143,7 @@ def main() -> None:
         assert found["hum"]["detected"] and found["hum"]["evidence"]["base_frequency_hz"] == 50
     activity, profile = analysis["speech_activity"], analysis["noise_profile"]
     assert activity["version"] == "0.5.0" and activity["segments"][0]["start_seconds"] == 0
-    assert abs(activity["segments"][-1]["end_seconds"] - 3) < 1e-6
+    assert abs(activity["segments"][-1]["end_seconds"] - seconds) < 1e-6
     for left, right in zip(activity["segments"], activity["segments"][1:], strict=False):
         assert left["label"] != right["label"]
         assert abs(left["end_seconds"] - right["start_seconds"]) < 1e-6
@@ -154,6 +171,8 @@ def main() -> None:
         "dehum",
         "noise_reduction",
         "pre_gain",
+        "speech_leveler",
+        "compressor",
     ]
     assert all(step["reason"] for step in plan["steps"])
     request = urllib.request.Request(
@@ -164,8 +183,8 @@ def main() -> None:
     )
     with urllib.request.urlopen(request, timeout=180) as response:
         report = json.load(response)
-    assert report["pipeline_version"] == "0.7.0" and report["plan"]["steps"] == plan["steps"]
-    assert report["duration_seconds"] == 3 and report["sample_rate"] == 44100
+    assert report["pipeline_version"] == "0.8.0" and report["plan"]["steps"] == plan["steps"]
+    assert report["duration_seconds"] == seconds and report["sample_rate"] == 44100
     assert report["after"]["peak_dbfs"] is None or report["after"]["peak_dbfs"] <= 0
     if args.activity_demo:
         assert any(
@@ -175,6 +194,21 @@ def main() -> None:
         assert report["artifacts"]["background_reduction_db"] > 2
     if args.diagnostic_demo:
         assert "hum" in report["before"]["detected"] and "hum" not in report["after"]["detected"]
+    if args.dynamics_demo:
+        assert {curve["processor"] for curve in report["gain_envelopes"]} == {
+            "speech_leveler",
+            "compressor",
+        }
+        for curve in report["gain_envelopes"]:
+            assert curve["times_seconds"][0] == 0
+            assert curve["times_seconds"][-1] < seconds
+            assert len(curve["times_seconds"]) == len(curve["gain_db"]) <= 18002
+        with urllib.request.urlopen(endpoint + "/processed/stream", timeout=10) as response:
+            rendered = response.read()
+        before_gap = level_gap(sample)
+        after_gap = level_gap(rendered)
+        assert after_gap < before_gap - 3, (before_gap, after_gap)
+        print(f"Speech level gap: {before_gap:.1f} -> {after_gap:.1f} dB")
     with urllib.request.urlopen(endpoint + "/processing", timeout=10) as response:
         assert json.load(response) == report
     ranged = urllib.request.Request(endpoint + "/processed/stream", headers={"Range": "bytes=0-43"})
@@ -184,6 +218,19 @@ def main() -> None:
         "Audio smoke passed: ingestion, streaming, metrics, diagnostics, activity, "
         "corrections and cache"
     )
+
+
+def level_gap(wav: bytes) -> float:
+    """Compare matching synthetic phrases of quiet and loud speakers, in RMS dB."""
+    with wave.open(io.BytesIO(wav)) as audio:
+        frames = audio.readframes(audio.getnframes())
+        samples = struct.unpack(f"<{len(frames) // 2}h", frames)
+        rate = audio.getframerate()
+    levels = []
+    for start in (2.15, 6.15):
+        region = samples[round(start * rate) : round((start + 0.3) * rate)]
+        levels.append(10 * math.log10(sum(value * value for value in region) / len(region)))
+    return abs(levels[1] - levels[0])
 
 
 if __name__ == "__main__":

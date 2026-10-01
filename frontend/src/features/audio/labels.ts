@@ -19,4 +19,6 @@ export const processorTitles: Record<string, string> = {
   dehum: 'Eliminar zumbido',
   pre_gain: 'Ajuste de nivel previo',
   noise_reduction: 'Reducir ruido de fondo',
+  speech_leveler: 'Nivelar la voz',
+  compressor: 'Comprimir la dinámica',
 };

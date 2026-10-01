@@ -23,9 +23,16 @@ const metricsSchema = z.object({
   noise_rms_dbfs: decibels, estimated_snr_db: decibels,
   detected: z.array(z.string()),
 });
+const gainEnvelopeSchema = z.object({
+  processor: z.string().min(1), step_index: z.number().int().nonnegative(),
+  times_seconds: z.array(z.number().finite().nonnegative()).min(1).max(18002),
+  gain_db: z.array(z.number().finite()).min(1).max(18002),
+}).refine((curve) => curve.times_seconds.length === curve.gain_db.length
+  && curve.times_seconds[0] === 0
+  && curve.times_seconds.every((time, index, times) => index === 0 || time > times[index - 1]));
 const reportSchema = z.object({
   audio_id: z.string().regex(/^[a-f0-9]{32}$/),
-  pipeline_version: z.literal('0.7.0'),
+  pipeline_version: z.literal('0.8.0'),
   plan: planSchema,
   steps: z.array(z.object({
     processor: z.string().min(1), enabled: z.boolean(),
@@ -38,6 +45,7 @@ const reportSchema = z.object({
   processing_seconds: z.number().finite().nonnegative(),
   real_time_factor: z.number().finite().nonnegative(),
   before: metricsSchema, after: metricsSchema,
+  gain_envelopes: z.array(gainEnvelopeSchema).max(32),
   artifacts: z.object({
     total_reduction_db: decibels, speech_energy_loss_db: decibels,
     background_reduction_db: decibels,
@@ -45,7 +53,16 @@ const reportSchema = z.object({
     excessive_reduction: z.boolean(), significant_speech_loss: z.boolean(), possible_musical_noise: z.boolean(),
   }).nullable(),
 }).refine((report) => report.steps.length === report.plan.steps.length
-  && report.before.dc_offset.length === report.channels && report.after.dc_offset.length === report.channels);
+  && report.before.dc_offset.length === report.channels && report.after.dc_offset.length === report.channels
+  && new Set(report.gain_envelopes.map((curve) => curve.step_index)).size === report.gain_envelopes.length
+  && report.steps.every((step, index) => !step.enabled || !['speech_leveler', 'compressor'].includes(step.processor)
+    || report.gain_envelopes.some((curve) => curve.step_index === index))
+  && report.gain_envelopes.every((curve) => {
+    const step = report.steps[curve.step_index];
+    const planned = report.plan.steps[curve.step_index];
+    return step?.enabled && planned?.enabled && step.processor === curve.processor
+      && planned.processor === curve.processor && curve.times_seconds.every((time) => time < report.duration_seconds);
+  }));
 
 export type ProcessingStep = z.infer<typeof stepSchema>;
 export type ProcessingPlan = z.infer<typeof planSchema>;

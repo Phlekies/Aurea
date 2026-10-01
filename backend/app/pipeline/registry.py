@@ -3,11 +3,13 @@
 from collections.abc import Callable
 
 from app.processors.base import StreamingProcessor
+from app.processors.compressor import CompressorProcessor
 from app.processors.dc_removal import DcRemovalProcessor
 from app.processors.dehum import DeHumProcessor
 from app.processors.highpass import HighPassProcessor
 from app.processors.noise_reduction import NoiseReducer
 from app.processors.pregain import PreGainProcessor
+from app.processors.speech_leveler import SpeechLevelerProcessor
 
 
 class ProcessorRegistry:
@@ -37,11 +39,13 @@ class ProcessorRegistry:
 
 
 def default_registry() -> ProcessorRegistry:
-    """Corrective and spectral processors available in pipeline version 0.7.0."""
+    """Corrective, spectral and voice dynamics processors in pipeline version 0.8.0."""
     registry = ProcessorRegistry()
     registry.register("dc_removal", DcRemovalProcessor)
     registry.register("high_pass", HighPassProcessor)
     registry.register("dehum", DeHumProcessor)
     registry.register("pre_gain", PreGainProcessor)
     registry.register("noise_reduction", NoiseReducer)
+    registry.register("speech_leveler", SpeechLevelerProcessor)
+    registry.register("compressor", CompressorProcessor)
     return registry

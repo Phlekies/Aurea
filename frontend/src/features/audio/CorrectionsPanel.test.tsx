@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { audioAsset, jsonResponse, processingPlan, processingReport, waveform } from '../../test/fixtures';
+import { audioAsset, dynamicsPlan, dynamicsReport, jsonResponse, processingPlan, processingReport, waveform } from '../../test/fixtures';
 import { CorrectionsPanel } from './CorrectionsPanel';
 import type { ProcessingPlan } from '../../api/processing';
 
@@ -102,4 +102,52 @@ it('reports rendering failures and safety trims without losing the plan', async 
   await userEvent.click(screen.getByRole('button', { name: 'Aplicar correcciones' }));
   expect(await screen.findByRole('status')).toHaveTextContent('reducción de seguridad de 1,20 dB');
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+});
+
+it('edits dynamics settings, preserves speech intervals and reports the applied settings', async () => {
+  const fetch = server({ plan: dynamicsPlan, process: () => jsonResponse(dynamicsReport) });
+  render(<CorrectionsPanel audioId={audioAsset.id} />);
+  const leveler = await screen.findByRole('article', { name: 'Nivelar la voz' });
+  const compressor = screen.getByRole('article', { name: 'Comprimir la dinámica' });
+  await userEvent.click(within(leveler).getByText('Ajustes de nivelado'));
+  await userEvent.clear(within(leveler).getByRole('spinbutton', { name: 'Objetivo de voz (dBFS)' }));
+  await userEvent.type(within(leveler).getByRole('spinbutton', { name: 'Objetivo de voz (dBFS)' }), '-22');
+  await userEvent.clear(within(leveler).getByRole('spinbutton', { name: 'Aumento máximo (dB)' }));
+  await userEvent.type(within(leveler).getByRole('spinbutton', { name: 'Aumento máximo (dB)' }), '6');
+  await userEvent.click(within(leveler).getByText('¿Por qué?'));
+  expect(within(leveler).getByText(/Se utilizan 2 tramos de actividad/)).toBeVisible();
+  expect(within(leveler).queryByText('Speech starts seconds')).not.toBeInTheDocument();
+  await userEvent.click(within(compressor).getByText('Ajustes de compresión'));
+  for (const [name, value] of [['Umbral (dBFS)', '-20'], ['Relación de compresión (:1)', '3'], ['Transición suave (dB)', '8'], ['Ataque (ms)', '15'], ['Recuperación (ms)', '200'], ['Compensación (dB)', '1']]) {
+    const input = within(compressor).getByRole('spinbutton', { name });
+    await userEvent.clear(input); await userEvent.type(input, value);
+  }
+  await userEvent.click(screen.getByRole('button', { name: 'Aplicar correcciones' }));
+  const call = fetch.mock.calls.find(([url]) => String(url).endsWith('/process'))!;
+  const sent = JSON.parse(String((call[1] as RequestInit).body));
+  expect(sent.plan.steps[4].parameters).toMatchObject({ target_rms_dbfs: -22, max_boost_db: 6, speech_starts_seconds: [.5, 3.5], speech_ends_seconds: [2, 5] });
+  expect(sent.plan.steps[5].parameters).toEqual({ threshold_dbfs: -20, ratio: 3, knee_db: 8, attack_ms: 15, release_ms: 200, makeup_gain_db: 1 });
+  expect(await screen.findByLabelText('Ganancia aplicada a la voz')).toHaveTextContent('Nivelar la voz: de -4,0 a 5,0 dB');
+  expect(screen.getByText(/Aplicado:.*Nivelar la voz \(Objetivo -24 dBFS · aumento hasta 8 dB\).*Comprimir la dinámica \(-18 dBFS · 2,0:1\)/)).toBeInTheDocument();
+});
+
+it('bounds an out-of-range setting and downloads complete applied curves', async () => {
+  server({ plan: dynamicsPlan, process: () => jsonResponse(dynamicsReport) });
+  const createUrl = vi.fn().mockReturnValue('blob:processing-report');
+  vi.stubGlobal('URL', class extends URL { static createObjectURL = createUrl; static revokeObjectURL = vi.fn(); });
+  const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  render(<CorrectionsPanel audioId={audioAsset.id} />);
+  const leveler = await screen.findByRole('article', { name: 'Nivelar la voz' });
+  await userEvent.click(within(leveler).getByText('Ajustes de nivelado'));
+  const boost = within(leveler).getByRole('spinbutton', { name: 'Aumento máximo (dB)' });
+  await userEvent.clear(boost); await userEvent.type(boost, '99'); await userEvent.tab();
+  expect(boost).toHaveValue(12);
+  await userEvent.click(screen.getByRole('button', { name: 'Aplicar correcciones' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Descargar informe de correcciones' }));
+  expect(clicked).toHaveBeenCalledOnce();
+  const exported = await new Promise<string>((resolve) => {
+    const reader = new FileReader(); reader.onload = () => resolve(String(reader.result));
+    reader.readAsText(createUrl.mock.calls[0][0] as Blob);
+  });
+  expect(JSON.parse(exported)).toEqual(dynamicsReport);
 });

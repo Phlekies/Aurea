@@ -1,5 +1,5 @@
 import type { Diagnostic } from '../api/analysis';
-import type { ProcessingPlan } from '../api/processing';
+import type { ProcessingPlan, ProcessingReport } from '../api/processing';
 
 export const audioConfig = {
   formats: ['wav', 'flac', 'mp3', 'm4a', 'ogg'], max_upload_bytes: 104857600,
@@ -53,7 +53,7 @@ export function jsonResponse(data: unknown, status = 200) {
 }
 
 export const processingPlan: ProcessingPlan = {
-  preset: 'corrective', version: '0.7.0',
+  preset: 'corrective', version: '0.8.0',
   steps: [
     { processor: 'dc_removal', enabled: true, parameters: { offsets: [0.02] }, reason: 'Hay desplazamiento de continua.', source_diagnostic: null, confidence: null, evidence: { max_abs_dc_offset: 0.02, threshold: 0.001 } },
     { processor: 'high_pass', enabled: false, parameters: { cutoff_hz: 60, order: 4 }, reason: 'No se ha detectado ruido grave.', source_diagnostic: 'rumble', confidence: 0.6, evidence: { candidate_cutoffs_hz: [60, 70, 80, 100] } },
@@ -62,12 +62,36 @@ export const processingPlan: ProcessingPlan = {
   ],
 };
 const metrics = { peak_dbfs: -6, rms_dbfs: -20, integrated_lufs: -18, true_peak_dbtp: -5.8, dc_offset: [0.02], subbass_percent: 12, noise_rms_dbfs: -55, estimated_snr_db: 30, detected: ['hum'] };
-export const processingReport = {
+export const processingReport: ProcessingReport = {
   artifacts: null,
-  audio_id: audioAsset.id, pipeline_version: '0.7.0', plan: processingPlan,
+  gain_envelopes: [],
+  audio_id: audioAsset.id, pipeline_version: '0.8.0', plan: processingPlan,
   steps: processingPlan.steps.map((step) => ({ processor: step.processor, enabled: step.enabled, parameters: step.parameters, seconds: 0.012 })),
   sample_rate: 44100, channels: 1, duration_seconds: 5, safety_gain_db: 0, warnings: [],
   processing_seconds: 0.4, real_time_factor: 0.08,
   before: metrics,
   after: { ...metrics, peak_dbfs: -6.4, dc_offset: [0.00001], subbass_percent: 2, detected: [] },
+};
+
+export const dynamicsPlan: ProcessingPlan = {
+  ...processingPlan,
+  steps: [...processingPlan.steps, {
+    processor: 'speech_leveler', enabled: true,
+    parameters: { target_rms_dbfs: -24, max_boost_db: 8, max_cut_db: 8, window_ms: 400, smoothing_ms: 500, speech_starts_seconds: [.5, 3.5], speech_ends_seconds: [2, 5], noise_floor_dbfs: -55 },
+    reason: 'La voz cambia de nivel entre los tramos analizados.', source_diagnostic: null, confidence: null,
+    evidence: { speech_available: true, speech_seconds: 3, speech_rms_dbfs: -18, speech_level_spread_db: 10 },
+  }, {
+    processor: 'compressor', enabled: true,
+    parameters: { threshold_dbfs: -18, ratio: 2, knee_db: 6, attack_ms: 10, release_ms: 150, makeup_gain_db: 0 },
+    reason: 'Suaviza las diferencias de volumen en la voz.', source_diagnostic: null, confidence: null, evidence: {},
+  }],
+};
+export const dynamicsReport: ProcessingReport = {
+  ...processingReport,
+  plan: dynamicsPlan,
+  steps: dynamicsPlan.steps.map((step) => ({ processor: step.processor, enabled: step.enabled, parameters: step.parameters, seconds: .012 })),
+  gain_envelopes: [
+    { processor: 'speech_leveler', step_index: 4, times_seconds: [0, 1, 3, 4.99], gain_db: [0, 5, -4, 0] },
+    { processor: 'compressor', step_index: 5, times_seconds: [0, 1, 3, 4.99], gain_db: [0, -2, -5, 0] },
+  ],
 };

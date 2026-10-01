@@ -2,7 +2,9 @@
 
 Restauración y mastering explicable para podcasts. El objetivo es **analizar → diagnosticar → recomendar → procesar → comparar → exportar**, conservando siempre el audio original.
 
-**Estado: fase 6 implementada (v0.7.0).** Sube WAV, FLAC, MP3, M4A u OGG, escucha la grabación y pulsa **Analizar grabación** para obtener métricas, un diagnóstico explicable y la separación entre voz y ruido de fondo. Se comprueban clipping, zumbido de 50/60 Hz, ruido grave, nivel bajo, poco headroom, ruido estacionario, sibilancia y plosivas. Cada resultado incluye mensaje, evidencia, severidad, confianza heurística y parámetros. Un VAD con histéresis dibuja la línea temporal de voz, fondo y silencio; las pausas producen un perfil de ruido (nivel, suelo, espectro y estabilidad) y una SNR aproximada. El informe completo se puede descargar en JSON. A partir del diagnóstico, Aurea recomienda una cadena correctiva explicable: eliminación de DC, filtro paso alto con el corte mínimo que elimina el ruido grave, eliminación de zumbido 50/60 Hz y ajuste de nivel. Puedes activar o desactivar cada paso, escuchar la versión corregida y comparar las mediciones antes y después. El original nunca se modifica. La reducción de ruido ofrece sustracción espectral, puerta espectral y Wiener, con intensidad suave, equilibrada o intensa y controles de posibles artefactos. El nivelado y el mastering llegarán en las fases siguientes.
+**Estado: fase 7 implementada (v0.8.0).** Sube WAV, FLAC, MP3, M4A u OGG, escucha y pulsa **Analizar grabación** para obtener métricas, ocho diagnósticos explicables, actividad de voz, perfil de fondo y SNR aproximada. Aurea recomienda una cadena con eliminación de DC, paso alto adaptativo, de-hum, reducción de ruido y ajustes de nivel. La reducción de ruido ofrece sustracción espectral, puerta y Wiener, con tres intensidades. El nuevo nivelador ajusta suavemente los intervalos de voz, protege las pausas y limita el refuerzo; el compresor permite configurar umbral, relación, rodilla, ataque, recuperación y compensación. Puedes activar pasos, ajustar parámetros, escuchar y comparar antes/después. Los informes descargables conservan métricas, decisiones y curvas de ganancia aplicada. El original nunca se modifica. El loudness final y el mastering pertenecen a la fase 8.
+
+Para orientarte por los archivos y las funciones principales, empieza por la [guía rápida del código](docs/code-guide.md).
 
 La interfaz utiliza la paleta definitiva **Claridad Acústica**: azul noche `#0B132B`, cian `#00E5FF`, turquesa `#1DE9B6`, gris azulado `#3A506B` y texto blanco `#FFFFFF`.
 
@@ -80,7 +82,7 @@ backend/app/domain/         AudioBuffer, AudioAsset y errores, independientes de
 backend/app/audio/          FFmpeg, PCM I/O, conversión y waveform
 backend/app/analysis/       Métricas, ventanas de 30 ms, VAD intercambiable y perfil de ruido
 backend/app/diagnostics/    Evidencias de señal, ocho detectores explicables y motor de diagnóstico
-backend/app/processors/     Procesadores registrables: DC, paso alto, de-hum y ganancia
+backend/app/processors/     DC, paso alto, de-hum, ganancia, reducción de ruido y dinámica de voz
 backend/app/pipeline/       Registro, reglas de decisión centralizadas y runner por bloques
 backend/app/services/       Ingesta, análisis, caché y almacenamiento temporal
 backend/app/api/            Contratos Pydantic y rutas HTTP
@@ -108,7 +110,7 @@ Se admiten dos ingestas y un análisis simultáneo por proceso; exceder esa capa
 `GET /health` devuelve HTTP 200:
 
 ```json
-{"status":"ok","service":"aurea","version":"0.7.0"}
+{"status":"ok","service":"aurea","version":"0.8.0"}
 ```
 
 El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamiento ni procesamiento DSP.
@@ -124,7 +126,7 @@ El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamient
 | `GET /api/audio/{id}/analysis` | Recupera el informe ya calculado (200; 404 si falta) |
 | `GET /api/audio/{id}/processing/plan` | Cadena correctiva recomendada con motivos y evidencia |
 | `POST /api/audio/{id}/process` | Renderiza el plan recomendado o el enviado (`{"plan": …}`); devuelve el manifiesto |
-| `GET /api/audio/{id}/processing` | Último manifiesto: pasos, tiempos, avisos y métricas antes/después |
+| `GET /api/audio/{id}/processing` | Último manifiesto: pasos, tiempos, avisos, métricas antes/después y curvas de ganancia |
 | `GET /api/audio/{id}/processed/waveform` | Picos de la versión corregida |
 | `GET /api/audio/{id}/processed/stream` | Versión corregida; admite Range (206) |
 
@@ -139,6 +141,7 @@ Con ambos servidores arrancados, en Windows:
 .\.venv\Scripts\python.exe scripts/smoke_audio.py --write-sample data/qa/episode-synthetic.wav
 .\.venv\Scripts\python.exe scripts/smoke_audio.py --diagnostic-demo --write-sample data/qa/diagnostic-demo.wav
 .\.venv\Scripts\python.exe scripts/smoke_audio.py --activity-demo --write-sample data/qa/activity-demo.wav
+.\.venv\Scripts\python.exe scripts/smoke_audio.py --dynamics-demo --write-sample data/qa/dynamics-demo.wav
 ```
 
 En macOS/Linux sustituye el intérprete por `.venv/bin/python`. El primer comando comprueba carga, metadatos, waveform, reproducción parcial, métricas, los ocho diagnósticos, la línea temporal de voz, el perfil de ruido, la cadena correctiva y su versión procesada, y la caché a través del proxy. Los otros comandos crean clips sintéticos de 12 segundos para cargar desde la interfaz y pulsar **Analizar grabación**. La demo de diagnóstico introduce deliberadamente clipping y un tono persistente de 50 Hz; la de actividad alterna frases sintéticas y pausas sobre un siseo conocido para mostrar la línea temporal y el perfil de ruido. Ninguna contiene voz privada ni audio con licencia. Usa `--diagnostic-demo` o `--activity-demo` sin `--write-sample` para ejecutar también el smoke positivo. Los tres casos se comprueban contra Docker en CI.
@@ -147,9 +150,11 @@ Los informes anteriores a v0.6.0 se recalculan al pulsar **Analizar grabación**
 
 ## Roadmap
 
-Consulta el [plan completo](podcast_audio_doctor_project_plan.md) y el [estado de implementación](docs/progress.md). El siguiente entregable es la fase 7: nivelado de voz y compresión.
+Consulta el [plan completo](podcast_audio_doctor_project_plan.md) y el [estado de implementación](docs/progress.md). El siguiente entregable es la fase 8: loudness, masterización y limiter.
 
 Fuentes de implementación: [Vite](https://vite.dev/guide/), [testing de FastAPI](https://fastapi.tiangolo.com/tutorial/testing/) y [Vitest](https://vitest.dev/guide/).
 Audio: [archivos en FastAPI](https://fastapi.tiangolo.com/tutorial/request-files/), [protocolos FFmpeg](https://ffmpeg.org/ffmpeg-protocols.html), [selección de pistas FFmpeg](https://ffmpeg.org/ffmpeg.html), [SoundFile](https://python-soundfile.readthedocs.io/) y [WaveSurfer](https://wavesurfer.xyz/).
 
 Métodos, presets, benchmark y límites de reducción de ruido: [noise-reduction.md](docs/noise-reduction.md).
+
+Métodos, controles, curvas y límites del nivelador y compresor: [voice-leveling.md](docs/voice-leveling.md). La demo `--dynamics-demo` también ejecuta una prueba HTTP de 12 s con cambios de volumen, pausas y curvas; CI comprueba los cuatro smoke.
