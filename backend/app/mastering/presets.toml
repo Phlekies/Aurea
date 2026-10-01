@@ -1,0 +1,13 @@
+[podcast_standard]
+name = "Podcast Standard"
+target_lufs = -16.0
+max_true_peak_dbtp = -1.0
+target_lra_lu = 11.0
+loudness_tolerance_lu = 0.5
+
+[broadcast_r128]
+name = "Broadcast R128"
+target_lufs = -23.0
+max_true_peak_dbtp = -1.0
+target_lra_lu = 11.0
+loudness_tolerance_lu = 0.5

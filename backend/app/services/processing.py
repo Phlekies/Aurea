@@ -47,7 +47,7 @@ from app.pipeline.registry import ProcessorRegistry, default_registry
 from app.pipeline.runner import PreparedStep, prepare, run_plan
 from app.services.analysis import AnalysisService
 
-PIPELINE_VERSION = "0.8.0"
+PIPELINE_VERSION = "0.9.0"
 logger = logging.getLogger("aurea.processing")
 STAGING_ID = re.compile(r"^\.processing-[a-f0-9]{32}$")
 # Damage that level or filter changes can hide from a detector but never repair.

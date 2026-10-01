@@ -34,7 +34,7 @@ def recommend_processing_plan(
         list(profile.frequencies_hz) if available and profile else [0.0, analysis.sample_rate / 2]
     )
     density = (
-        [value if value is not None else -300.0 for value in profile.psd_dbfs_per_hz]
+        [max(-300.0, value) if value is not None else -300.0 for value in profile.psd_dbfs_per_hz]
         if available and profile
         else [-300.0, -300.0]
     )

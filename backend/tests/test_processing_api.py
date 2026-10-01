@@ -60,7 +60,7 @@ def test_recommended_rendering_removes_hum_and_dc_without_touching_the_original(
         response = client.post(f"/api/audio/{asset_id}/process")
         assert response.status_code == 200, response.text
         report = response.json()
-        assert report["pipeline_version"] == "0.8.0" and report["plan"]["steps"] == plan["steps"]
+        assert report["pipeline_version"] == "0.9.0" and report["plan"]["steps"] == plan["steps"]
         assert "hum" in report["before"]["detected"] and "hum" not in report["after"]["detected"]
         assert abs(report["after"]["dc_offset"][0]) < 1e-4 < abs(report["before"]["dc_offset"][0])
         assert report["warnings"] == [] and report["safety_gain_db"] == 0

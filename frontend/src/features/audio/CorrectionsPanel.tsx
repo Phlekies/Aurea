@@ -6,6 +6,7 @@ import { WavePlayer } from './AudioPlayer';
 import { formatNumber as number } from './format';
 import { diagnosticTitles, processorTitles } from './labels';
 import { Measurements } from './Measurements';
+import { MasteringPanel } from './MasteringPanel';
 
 const scalar = (value: ProcessingStep['parameters'][string]) => typeof value === 'number' ? value : 0;
 const algorithms: Record<string, string> = { wiener: 'Filtro de Wiener', spectral_subtraction: 'Sustracción espectral', spectral_gate: 'Puerta espectral' };
@@ -199,6 +200,6 @@ export function CorrectionsPanel({ audioId }: { audioId: string }) {
       </div>
     </>}
     {error && <div role="alert" className="analysis-error">{error}</div>}
-    {report && <Result report={report} revision={revision} />}
+    {report && <><Result report={report} revision={revision} /><MasteringPanel key={revision} audioId={audioId} correctionsBusy={busy} /></>}
   </section>;
 }

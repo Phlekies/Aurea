@@ -42,7 +42,7 @@ def test_noise_selection_rendering_and_safe_cache(
         response = client.post(f"/api/audio/{asset}/process", json={"plan": plan})
         assert response.status_code == 200, response.text
         report = response.json()
-        assert report["pipeline_version"] == "0.8.0"
+        assert report["pipeline_version"] == "0.9.0"
         assert report["artifacts"]["background_reduction_db"] > 2
         assert report["artifacts"]["speech_energy_loss_db"] < 6
         assert (storage / asset / "original.wav").read_bytes() == original

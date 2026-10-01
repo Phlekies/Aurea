@@ -513,3 +513,24 @@ main { margin-left: 238px; width: calc(100% - 238px); }
 .gain-summary { margin-top: 16px; padding: 14px; border: 1px solid var(--interface); border-radius: 8px; font-size: 11px; }
 .gain-summary h5 { margin: 0 0 8px; font-size: 12px; }
 .gain-summary > p { margin: 6px 0; line-height: 1.7; }
+.mastering-section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--interface); }
+.mastering-target { color: var(--primary); font-size: 18px; font-weight: 600; }
+.mastering-target span { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.7; }
+.mastering-passed { display: flex; align-items: center; gap: 8px; color: var(--secondary); font-size: 12px; margin: 22px 0 16px; }
+.mastering-downloads { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0 10px; }
+.mastering-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; list-style: none; padding: 0; }
+.mastering-checks li { display: flex; gap: 8px; color: var(--secondary); }
+.mastering-checks strong { display: block; font-size: 11px; color: var(--text); }
+.mastering-checks small { display: block; margin-top: 4px; font-size: 10px; color: var(--muted); }
+.loudness-chart { margin: 20px 0; padding: 12px; border: 1px solid var(--interface); border-radius: 8px; }
+.loudness-chart figcaption { font-size: 11px; line-height: 1.8; }
+.loudness-chart figcaption span { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; }
+.loudness-chart svg { display: block; width: 100%; margin-top: 10px; overflow: visible; }
+.loudness-chart svg text { fill: var(--muted); font-size: 10px; }
+.loudness-grid { stroke: var(--interface); stroke-width: .5; }
+.loudness-target { stroke: var(--text); stroke-dasharray: 4 4; opacity: .5; }
+.loudness-m, .loudness-s { fill: none; stroke-width: 1.5; stroke-linejoin: round; }
+.loudness-m { stroke: var(--primary); }
+.loudness-s { stroke: var(--secondary); }
+.legend-m, .legend-s { width: 10px; height: 3px; background: var(--primary); }
+.legend-s { background: var(--secondary); margin-left: 8px; }

@@ -16,7 +16,7 @@ Aceptación: implementación, pruebas, documentación, ejemplo reproducible, API
 
 ## Siguiente fase
 
-Fase 8 — Loudness y masterización: objetivos de exportación y limiter según el plan.
+Fase 9 — Decision Engine: unificar las decisiones deterministas y los presets de procesamiento según el plan.
 
 Las fases posteriores siguen el orden del plan. No se considerará terminado un entregable sin pruebas, documentación y comprobaciones de calidad.
 
@@ -111,3 +111,17 @@ Interfaz: pasos con motivos y evidencia, controles de nivelado y seis parámetro
 Verificación local: `npm run check` correcto con 407 pruebas backend y 91 frontend, Ruff/formato, ESLint, mypy estricto, TypeScript y build. Los cuatro smoke HTTP pasan por el proxy local (normal, diagnóstico, actividad y dinámica). En el smoke de dinámica, la diferencia RMS de las frases comparadas baja de 18,6 a 14,9 dB con los ajustes predeterminados y se guardan ambas curvas. Las pruebas con frases más largas exigen una mejora superior a 6 dB. Se comprueban silencio, ruido solo aun con VAD falso, rampas, estéreo, rodilla, tiempos, frecuencias impares, 30 min, curvas y salida entre bloques, ganancia previa manual, conservación del original, parámetros y caché inválidos. [CI de fase 7](https://github.com/Phlekies/Aurea/actions/runs/36828314178) correcta sobre `0e3057d`: quality pasa en 2 min 49 s y Docker en 1 min 13 s, incluidos los cuatro smoke HTTP.
 
 Limitaciones: RMS y VAD heurísticos, sin corpus real ni evaluación perceptual. Una voz muy baja respecto a otra puede quedar fuera del VAD y no recibir refuerzo. Una transición a ruido dentro de un tramo VAD prolongado puede conservar ganancia unos 40 ms; vuelve a 0 dB desde 50 ms en las pruebas. El compresor es causal, sin lookahead; se mantiene la protección de escala completa y el limiter de true peak queda para fase 8. Métodos, parámetros, ejemplo y límites: [voice-leveling.md](voice-leveling.md).
+
+## Fase 8 — Masterización para podcast implementada (v0.9.0)
+
+Implementado: medición integrado/momentáneo (400 ms)/corto plazo (3 s)/LRA y true peak independiente; presets externos TOML Podcast Standard (−16 LUFS, −1 dBTP) y Broadcast R128 (−23 LUFS, −1 dBTP), ambos con tolerancia de loudness ±0,5 LU. Renderizado `loudnorm` a dos pasadas, modo lineal cuando lo permiten las mediciones y dinámico con limitador a 192 kHz en los demás casos. El WAV final es PCM24 a frecuencia/canales nativos. Se remide después de cuantizar, con margen inicial de pico de 0,3 dB y hasta tres candidatos desde la misma fuente.
+
+Output QC obligatorio: loudness, true peak, saturación de salida, frames, canales, frecuencia, muestras finitas y ausencia de silencio accidental. Solo un resultado aprobado se publica en `mastered/`. La descarga exige informe válido, hash SHA-256 del WAV y misma generación de correcciones; cambiar la cadena invalida el máster. Se comparte capacidad con el procesado correctivo. Fallos de QC, metering y renombrado no dañan el original/corregido ni eliminan una publicación anterior válida.
+
+La integración detectó un fallo previo con tonos limpios: el perfil PSD podía tener residuos inferiores a −300 dBFS/Hz y generar parámetros inválidos incluso con el reductor desactivado. La recomendación ahora aplica el suelo numérico admitido. La cadena pasa a v0.9.0 y recalcula correcciones antiguas. También se normaliza la cadencia de puntos a intervalos absolutos de 100 ms, con tolerancia al redondeo del log: a 8004 Hz y 30 min no excede 18.001 puntos.
+
+Interfaz: selector de objetivo, resultado identificado por su preset, reproducción separada, descarga PCM24 e informe JSON, tabla antes/después, gráfico M/S y detalles de los ocho controles. Conserva Claridad Acústica. Revisada a 390 px sin desbordamiento. La demo de 12 s pasa de −26,2 a −15,7 LUFS y alcanza −1,294 dBTP. Reproducción completa y descarga real verificadas: WAVEX PCM24, 44,1 kHz, mono, 529.200 frames y SHA-256 coincidente. El objetivo alternativo produce −23,0 LUFS.
+
+Verificación local: `npm run check` correcto con 431 pruebas backend y 101 frontend; una prueba adicional confirma que el modo lineal conserva las diferencias de nivel (total backend: 432). Ruff/formato, ESLint, mypy estricto, TypeScript y build correctos. Los cuatro smoke HTTP pasan por el proxy, incluidos QC y descarga PCM24. Las pruebas cubren nivel de referencia, ventanas, picos entre muestras, dinámica, estéreo, 8004/44,1/48/96 kHz, presets, caché, archivo alterado, correcciones nuevas, capacidad, restauración y errores seguros. Comprobación real de 30 min a 8004 Hz: 37,8 s de procesado (factor 0,021), −16,0 LUFS, duración exacta y QC aprobado en el primer candidato. CI de esta fase pendiente de la publicación.
+
+Limitaciones: LRA inestable antes de 60 s, ventanas incompletas sin valor, normalización dinámica puede cambiar el balance temporal y QC no repara saturación del original. Sin certificación EBU ni corpus perceptual. Exportación multiformato y jobs siguen previstos en sus fases. La guía rápida se actualiza con los módulos nuevos; métodos, configuración, contratos y límites: [mastering.md](mastering.md).

@@ -32,7 +32,7 @@ const gainEnvelopeSchema = z.object({
   && curve.times_seconds.every((time, index, times) => index === 0 || time > times[index - 1]));
 const reportSchema = z.object({
   audio_id: z.string().regex(/^[a-f0-9]{32}$/),
-  pipeline_version: z.literal('0.8.0'),
+  pipeline_version: z.literal('0.9.0'),
   plan: planSchema,
   steps: z.array(z.object({
     processor: z.string().min(1), enabled: z.boolean(),

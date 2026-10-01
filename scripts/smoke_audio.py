@@ -183,7 +183,7 @@ def main() -> None:
     )
     with urllib.request.urlopen(request, timeout=180) as response:
         report = json.load(response)
-    assert report["pipeline_version"] == "0.8.0" and report["plan"]["steps"] == plan["steps"]
+    assert report["pipeline_version"] == "0.9.0" and report["plan"]["steps"] == plan["steps"]
     assert report["duration_seconds"] == seconds and report["sample_rate"] == 44100
     assert report["after"]["peak_dbfs"] is None or report["after"]["peak_dbfs"] <= 0
     if args.activity_demo:
@@ -214,9 +214,37 @@ def main() -> None:
     ranged = urllib.request.Request(endpoint + "/processed/stream", headers={"Range": "bytes=0-43"})
     with urllib.request.urlopen(ranged, timeout=10) as response:
         assert response.status == 206 and response.read().startswith(b"RIFF")
+    request = urllib.request.Request(endpoint + "/master", data=b"", method="POST")
+    with urllib.request.urlopen(request, timeout=300) as response:
+        master = json.load(response)
+    assert master["mastering_version"] == "0.9.0" and master["qc"]["passed"]
+    assert len(master["qc"]["checks"]) == 8 and all(c["passed"] for c in master["qc"]["checks"])
+    assert abs(master["after"]["integrated_lufs"] + 16) <= 0.5
+    assert master["after"]["true_peak_dbtp"] <= -0.98
+    with urllib.request.urlopen(endpoint + "/mastered/download", timeout=30) as response:
+        assert "attachment" in response.headers["Content-Disposition"]
+        downloaded = response.read()
+    # FFmpeg PCM24 stereo/mono can use WAVE_FORMAT_EXTENSIBLE. Check the RIFF chunks
+    # directly so the smoke also works on Python 3.11 without soundfile dependencies.
+    assert downloaded[:4] == b"RIFF" and downloaded[8:12] == b"WAVE"
+    offset, pcm_bytes, fmt = 12, 0, b""
+    while offset + 8 <= len(downloaded):
+        chunk, length = struct.unpack_from("<4sI", downloaded, offset)
+        payload = downloaded[offset + 8 : offset + 8 + length]
+        if chunk == b"fmt ":
+            fmt = payload
+        if chunk == b"data":
+            pcm_bytes = length
+        offset += 8 + length + length % 2
+    assert struct.unpack_from("<H", fmt, 2)[0] == asset["channels"]
+    assert struct.unpack_from("<I", fmt, 4)[0] == asset["sample_rate"]
+    assert struct.unpack_from("<H", fmt, 14)[0] == 24
+    assert pcm_bytes == asset["frames"] * asset["channels"] * 3
+    with urllib.request.urlopen(endpoint + "/mastering", timeout=30) as response:
+        assert json.load(response) == master
     print(
         "Audio smoke passed: ingestion, streaming, metrics, diagnostics, activity, "
-        "corrections and cache"
+        "corrections, verified mastering, PCM24 download and cache"
     )
 
 

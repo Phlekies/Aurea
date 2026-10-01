@@ -2,7 +2,7 @@
 
 Restauración y mastering explicable para podcasts. El objetivo es **analizar → diagnosticar → recomendar → procesar → comparar → exportar**, conservando siempre el audio original.
 
-**Estado: fase 7 implementada (v0.8.0).** Sube WAV, FLAC, MP3, M4A u OGG, escucha y pulsa **Analizar grabación** para obtener métricas, ocho diagnósticos explicables, actividad de voz, perfil de fondo y SNR aproximada. Aurea recomienda una cadena con eliminación de DC, paso alto adaptativo, de-hum, reducción de ruido y ajustes de nivel. La reducción de ruido ofrece sustracción espectral, puerta y Wiener, con tres intensidades. El nuevo nivelador ajusta suavemente los intervalos de voz, protege las pausas y limita el refuerzo; el compresor permite configurar umbral, relación, rodilla, ataque, recuperación y compensación. Puedes activar pasos, ajustar parámetros, escuchar y comparar antes/después. Los informes descargables conservan métricas, decisiones y curvas de ganancia aplicada. El original nunca se modifica. El loudness final y el mastering pertenecen a la fase 8.
+**Estado: fase 8 implementada (v0.9.0).** Sube WAV, FLAC, MP3, M4A u OGG, pulsa **Analizar grabación** y aplica las correcciones recomendadas: DC, paso alto, de-hum, reducción de ruido, nivelado y compresión. Después elige un objetivo en **Masterización** y pulsa **Crear máster**. Podcast Standard busca −16 LUFS y true peak ≤−1 dBTP; Broadcast R128, −23 LUFS. Puedes escuchar, comparar integrado/momentáneo/corto plazo/LRA y descargar el WAV PCM de 24 bits solo tras superar ocho controles del archivo final. Los informes JSON conservan métricas, decisiones, curvas y comprobaciones. El original siempre se conserva. Métodos, presets y límites: [mastering.md](docs/mastering.md).
 
 Para orientarte por los archivos y las funciones principales, empieza por la [guía rápida del código](docs/code-guide.md).
 
@@ -84,6 +84,7 @@ backend/app/analysis/       Métricas, ventanas de 30 ms, VAD intercambiable y p
 backend/app/diagnostics/    Evidencias de señal, ocho detectores explicables y motor de diagnóstico
 backend/app/processors/     DC, paso alto, de-hum, ganancia, reducción de ruido y dinámica de voz
 backend/app/pipeline/       Registro, reglas de decisión centralizadas y runner por bloques
+backend/app/mastering/      Medición R128, presets TOML, loudnorm a dos pasadas y Output QC
 backend/app/services/       Ingesta, análisis, caché y almacenamiento temporal
 backend/app/api/            Contratos Pydantic y rutas HTTP
 backend/tests/              Pruebas unitarias y de integración con FFmpeg real
@@ -110,7 +111,7 @@ Se admiten dos ingestas y un análisis simultáneo por proceso; exceder esa capa
 `GET /health` devuelve HTTP 200:
 
 ```json
-{"status":"ok","service":"aurea","version":"0.8.0"}
+{"status":"ok","service":"aurea","version":"0.9.0"}
 ```
 
 El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamiento ni procesamiento DSP.
@@ -129,6 +130,12 @@ El endpoint indica disponibilidad HTTP. No valida todavía FFmpeg, almacenamient
 | `GET /api/audio/{id}/processing` | Último manifiesto: pasos, tiempos, avisos, métricas antes/después y curvas de ganancia |
 | `GET /api/audio/{id}/processed/waveform` | Picos de la versión corregida |
 | `GET /api/audio/{id}/processed/stream` | Versión corregida; admite Range (206) |
+| `GET /api/audio/mastering/presets` | Objetivos configurables de publicación |
+| `POST /api/audio/{id}/master` | Masteriza el corregido; preset opcional (`{"preset":"podcast_standard"}`); QC obligatorio |
+| `GET /api/audio/{id}/mastering` | Informe del máster verificado de las correcciones actuales |
+| `GET /api/audio/{id}/mastered/waveform` | Picos del máster |
+| `GET /api/audio/{id}/mastered/stream` | Reproducción del máster en PCM16; admite Range |
+| `GET /api/audio/{id}/mastered/download` | WAV PCM24 con duración/muestreo/canales nativos; exige QC y verifica SHA-256 |
 
 Errores de dominio: `{ "code": "invalid_audio_file", "message": "…" }`. Estados: 413 para tamaño/duración, 415 para formato/MIME, 422 para audio no válido, 404 para ID ausente, 410 para caducado antes de limpieza y 503 para decodificador/capacidad. Los errores del parser HTTP usan el contrato `detail` de FastAPI.
 
@@ -144,9 +151,11 @@ Con ambos servidores arrancados, en Windows:
 .\.venv\Scripts\python.exe scripts/smoke_audio.py --dynamics-demo --write-sample data/qa/dynamics-demo.wav
 ```
 
-En macOS/Linux sustituye el intérprete por `.venv/bin/python`. El primer comando comprueba carga, reproducción, análisis, diagnósticos, actividad, perfil de ruido, procesamiento y caché a través del proxy. Los demás crean clips sintéticos de 12 s para cargar en la interfaz y pulsar **Analizar grabación**: saturación y zumbido, frases con ruido o cambios de volumen. No contienen voz privada ni audio con licencia. Usa `--diagnostic-demo`, `--activity-demo` o `--dynamics-demo` sin `--write-sample` para ejecutar el smoke correspondiente. Los cuatro casos se comprueban contra Docker en CI.
+En macOS/Linux sustituye el intérprete por `.venv/bin/python`. El primer comando comprueba carga, reproducción, análisis, diagnósticos, actividad, perfil de ruido, correcciones, masterización, ocho controles QC y descarga PCM24 a través del proxy. Los demás crean clips sintéticos de 12 s para cargar en la interfaz y pulsar **Analizar grabación**: saturación y zumbido, frases con ruido o cambios de volumen. No contienen voz privada ni audio con licencia. Usa `--diagnostic-demo`, `--activity-demo` o `--dynamics-demo` sin `--write-sample` para ejecutar el smoke correspondiente. Los cuatro casos se comprueban contra Docker en CI.
 
 Los informes anteriores a v0.6.0 se recalculan al pulsar **Analizar grabación**. Las grabaciones conservan su ID y el original; una caché antigua no se presenta como un diagnóstico actualizado.
+
+Las correcciones de versiones anteriores se vuelven a renderizar con la cadena v0.9.0. Cambiar las correcciones invalida el máster anterior; pulsa **Crear máster** de nuevo. Corrección y masterización comparten una única capacidad de renderizado por proceso. MP3/FLAC y opciones adicionales de exportación pertenecen a la fase 10.
 
 ## Roadmap
 

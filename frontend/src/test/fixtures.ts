@@ -53,7 +53,7 @@ export function jsonResponse(data: unknown, status = 200) {
 }
 
 export const processingPlan: ProcessingPlan = {
-  preset: 'corrective', version: '0.8.0',
+  preset: 'corrective', version: '0.9.0',
   steps: [
     { processor: 'dc_removal', enabled: true, parameters: { offsets: [0.02] }, reason: 'Hay desplazamiento de continua.', source_diagnostic: null, confidence: null, evidence: { max_abs_dc_offset: 0.02, threshold: 0.001 } },
     { processor: 'high_pass', enabled: false, parameters: { cutoff_hz: 60, order: 4 }, reason: 'No se ha detectado ruido grave.', source_diagnostic: 'rumble', confidence: 0.6, evidence: { candidate_cutoffs_hz: [60, 70, 80, 100] } },
@@ -65,7 +65,7 @@ const metrics = { peak_dbfs: -6, rms_dbfs: -20, integrated_lufs: -18, true_peak_
 export const processingReport: ProcessingReport = {
   artifacts: null,
   gain_envelopes: [],
-  audio_id: audioAsset.id, pipeline_version: '0.8.0', plan: processingPlan,
+  audio_id: audioAsset.id, pipeline_version: '0.9.0', plan: processingPlan,
   steps: processingPlan.steps.map((step) => ({ processor: step.processor, enabled: step.enabled, parameters: step.parameters, seconds: 0.012 })),
   sample_rate: 44100, channels: 1, duration_seconds: 5, safety_gain_db: 0, warnings: [],
   processing_seconds: 0.4, real_time_factor: 0.08,

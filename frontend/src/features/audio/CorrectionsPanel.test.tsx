@@ -4,12 +4,14 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { audioAsset, dynamicsPlan, dynamicsReport, jsonResponse, processingPlan, processingReport, waveform } from '../../test/fixtures';
 import { CorrectionsPanel } from './CorrectionsPanel';
 import type { ProcessingPlan } from '../../api/processing';
+import { masteringPresets } from '../../test/mastering-fixtures';
 
 vi.mock('wavesurfer.js', () => ({ default: { create: vi.fn(() => ({ on: vi.fn(), destroy: vi.fn() })) } }));
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 function server(options: { existing?: boolean; process?: () => Response; plan?: ProcessingPlan } = {}) {
   const fetch = vi.fn().mockImplementation((url: string) => {
+    if (url.endsWith('/mastering/presets')) return Promise.resolve(jsonResponse(masteringPresets));
     if (url.endsWith('/processing/plan')) return Promise.resolve(jsonResponse(options.plan ?? processingPlan));
     if (url.endsWith('/processing')) return Promise.resolve(options.existing ? jsonResponse(processingReport) : jsonResponse({ message: 'Sin versión procesada.' }, 404));
     if (url.endsWith('/processed/waveform')) return Promise.resolve(jsonResponse(waveform));
